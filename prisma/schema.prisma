@@ -1,0 +1,210 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum ScanStatus {
+  UPLOADED
+  VALIDATING
+  PREPROCESSING
+  OCR_PROCESSING
+  EXTRACTING
+  CLASSIFYING
+  VALIDATING_COMPLIANCE
+  COMPLETED
+  FAILED
+  NEEDS_REVIEW
+}
+
+enum ComplianceOverallStatus {
+  COMPLIANT
+  NON_COMPLIANT
+  COMPLIANT_WITH_WARNINGS
+  NEEDS_REVIEW
+}
+
+enum RuleStatus {
+  PASS
+  FAIL
+  WARNING
+  UNVERIFIABLE
+  NOT_APPLICABLE
+}
+
+enum RuleSeverity {
+  ERROR
+  WARNING
+  INFO
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  role      String   @default("inspector") // inspector, manufacturer, auditor, admin
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  scans     Scan[]
+}
+
+model Scan {
+  id              String                   @id @default(uuid())
+  userId          String?
+  status          ScanStatus               @default(UPLOADED)
+  category        String                   @default("GENERIC_PACKAGED_COMMODITY")
+  overallStatus   ComplianceOverallStatus?
+  rulesetVersion  String                   @default("LMPC-2011.v2026")
+  imageHash       String?
+  offlineClientId String?                  // Client-generated UUID for offline syncing
+  isOfflineSync   Boolean                  @default(false)
+  errorMessage    String?
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  user            User?                    @relation(fields: [userId], references: [id])
+  asset           UploadedAsset?
+  ocrResult       OCRResultRecord?
+  extraction      ExtractedDeclarationRecord?
+  evaluation      ComplianceEvaluationRecord?
+
+  @@index([status])
+  @@index([imageHash])
+  @@index([offlineClientId])
+}
+
+model UploadedAsset {
+  id             String   @id @default(uuid())
+  scanId         String   @unique
+  originalUrl    String
+  processedUrl   String?
+  mimeType       String
+  fileSize       Int
+  width          Int?
+  height         Int?
+  qualityScore   Float?
+  qualityWarning String?
+  hash           String
+  createdAt      DateTime @default(now())
+
+  scan           Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
+}
+
+model OCRResultRecord {
+  id               String   @id @default(uuid())
+  scanId           String   @unique
+  fullText         String
+  confidence       Float
+  detectedLanguage String?  @default("en")
+  blocksJson       String   // JSON serialized OCR Blocks & Bounding Boxes
+  provider         String   // 'mock' | 'gemini' | 'tesseract'
+  durationMs       Int?
+  createdAt        DateTime @default(now())
+
+  scan             Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
+}
+
+model ExtractedDeclarationRecord {
+  id                 String   @id @default(uuid())
+  scanId             String   @unique
+  productName        String?
+  genericName        String?
+  manufacturer       String?
+  packer             String?
+  importer           String?
+  countryOfOrigin    String?
+  manufactureDate    String?
+  packingDate        String?
+  bestBefore         String?
+  expiryDate         String?
+  batchNumber        String?
+  netQuantityJson    String?  // JSON: { value, unit, rawText, normalizedValue, confidence }
+  mrpJson            String?  // JSON: { amount, currency, rawText, isTaxInclusive, confidence }
+  unitSalePriceJson  String?  // JSON: { amount, perUnit, currency, confidence }
+  consumerCareJson   String?  // JSON: { phone, email, contactPerson, address, confidence }
+  addressesJson      String?  // JSON: { manufacturerAddress, packerAddress, importerAddress }
+  rawFieldsJson      String?  // JSON of all raw extracted fields
+  confidence         Float    @default(1.0)
+  extractionMethod   String   // 'deterministic' | 'gemini' | 'hybrid' | 'mock'
+  createdAt          DateTime @default(now())
+
+  scan               Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
+}
+
+model ComplianceEvaluationRecord {
+  id                   String                     @id @default(uuid())
+  scanId               String                     @unique
+  rulesetVersion       String
+  overallStatus        ComplianceOverallStatus
+  passedCount          Int                        @default(0)
+  failedCount          Int                        @default(0)
+  warningCount         Int                        @default(0)
+  unverifiableCount    Int                        @default(0)
+  notApplicableCount   Int                        @default(0)
+  evaluatedAt          DateTime                   @default(now())
+
+  scan                 Scan                       @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  violations           ComplianceViolationRecord[]
+}
+
+model ComplianceViolationRecord {
+  id              String                     @id @default(uuid())
+  evaluationId    String
+  ruleId          String
+  severity        RuleSeverity
+  status          RuleStatus
+  message         String
+  field           String?
+  extractedValue  String?
+  evidenceText    String?
+  boundingBoxJson String?                    // JSON: { x, y, width, height }
+  confidence      Float?
+  createdAt       DateTime                   @default(now())
+
+  evaluation      ComplianceEvaluationRecord @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId])
+}
+
+model ComplianceRuleRecord {
+  id                         String       @id
+  name                       String
+  description                String
+  legalReference             String       // e.g. "Legal Metrology (Packaged Commodities) Rules, 2011 - Rule 6(1)(e)"
+  category                   String       // "MANDATORY_DECLARATION" | "METRIC_UNIT" | "RETAIL_PRICE" | "ORIGIN" | "CONSUMER_PROTECTION" | "PLACEMENT"
+  severity                   RuleSeverity @default(ERROR)
+  applicability              String       @default("ALL_PACKAGED_COMMODITIES")
+  ruleVersion                String       @default("2026.01")
+  humanVerificationRequired  Boolean      @default(false)
+  conditionType              String       // "PRESENCE" | "FORMAT" | "VALUE" | "CROSS_FIELD" | "PLACEMENT"
+  parametersJson             String?
+  errorCode                  String
+  explanationEn              String
+  explanationHi              String
+  effectiveFrom              DateTime     @default(now())
+  effectiveTo                DateTime?
+  isActive                   Boolean      @default(true)
+  createdAt                  DateTime     @default(now())
+  updatedAt                  DateTime     @updatedAt
+}
+
+model RulesetVersionRecord {
+  version       String   @id
+  name          String
+  description   String
+  legalSource   String   // e.g. "Legal Metrology Act, 2009 & Packaged Commodities Rules 2011 (as amended up to 2023)"
+  effectiveFrom DateTime @default(now())
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+}
+
+model ProductCategoryRecord {
+  code              String   @id
+  name              String
+  description       String
+  requiredRulesJson String   // JSON array of required rule IDs
+  createdAt         DateTime @default(now())
+}
