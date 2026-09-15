@@ -88,6 +88,7 @@ export default function Home() {
   const [scans, setScans] = useState<AppScanItem[]>([]);
   const [selectedScan, setSelectedScan] = useState<AppScanItem | null>(null);
   const [currentLanguage, setCurrentLanguage] = useState<Language>('en');
+  const [isHindiNoticeOpen, setIsHindiNoticeOpen] = useState(false);
   const [themePreference, setThemePreference] = useState<ThemePreference>('system');
   const [systemPrefersDark, setSystemPrefersDark] = useState(false);
   const [isGuidelinesOpen, setIsGuidelinesOpen] = useState(false);
@@ -253,6 +254,13 @@ export default function Home() {
   const handleRequireAuth = (msg: string) => {
     setAuthRequiredMessage(msg);
     setIsAuthModalOpen(true);
+  };
+
+  const handleLanguageChange = (lang: Language) => {
+    setCurrentLanguage(lang);
+    if (lang === 'hi') {
+      setIsHindiNoticeOpen(true);
+    }
   };
 
   // Handle image capture from live camera or file input
@@ -480,7 +488,7 @@ export default function Home() {
           {/* Sticky App Header */}
           <AppHeader
             currentLanguage={currentLanguage}
-            onLanguageChange={setCurrentLanguage}
+            onLanguageChange={handleLanguageChange}
           />
 
           {/* User Status Bar (Shows sign-in banner if guest) */}
@@ -560,7 +568,7 @@ export default function Home() {
                 <SettingsScreen
                   currentUser={currentUser}
                   currentLanguage={currentLanguage}
-                  onLanguageChange={setCurrentLanguage}
+                  onLanguageChange={handleLanguageChange}
                   themePreference={themePreference}
                   onThemeChange={setThemePreference}
                   onOpenAuthModal={() => {
@@ -658,7 +666,7 @@ export default function Home() {
                 <SettingsScreen
                   currentUser={currentUser}
                   currentLanguage={currentLanguage}
-                  onLanguageChange={setCurrentLanguage}
+                  onLanguageChange={handleLanguageChange}
                   themePreference={themePreference}
                   onThemeChange={setThemePreference}
                   onOpenAuthModal={() => {
@@ -702,6 +710,34 @@ export default function Home() {
         }}
         requiredActionMessage={authRequiredMessage}
       />
+
+      {/* Hindi Language Notice Popup Modal */}
+      {isHindiNoticeOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-100 text-center flex flex-col items-center">
+            <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mb-3 shrink-0">
+              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="2" y1="12" x2="22" y2="12" />
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+              </svg>
+            </div>
+            <h3 className="text-base font-bold text-slate-900 mb-1.5">
+              हिंदी भाषा सूचना
+            </h3>
+            <p className="text-xs text-slate-600 leading-relaxed mb-4 font-medium">
+              ध्यान दें: केवल आपकी खोज और अनुपालन रिपोर्ट (Search & Compliance Report) हिंदी में तैयार और प्रदर्शित की जाएगी।
+            </p>
+            <button
+              type="button"
+              onClick={() => setIsHindiNoticeOpen(false)}
+              className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+            >
+              ठीक है, समझ गया
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Global Animated AI Scan Loading Overlay / Floating Pill */}
       <ScanLoadingModal
