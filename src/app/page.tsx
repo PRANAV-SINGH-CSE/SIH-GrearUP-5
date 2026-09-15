@@ -13,7 +13,8 @@ import { CameraModal } from '@/components/camera-modal';
 import { GuidelinesModal } from '@/components/guidelines-modal';
 import { AuthModal } from '@/components/auth-modal';
 import { FirebaseAuthService } from '@/lib/firebase/auth.service';
-import { SAMPLE_FALLBACK_SCAN, AppScanItem, RuleCheckItem } from '@/lib/mock-scans';
+import { FirebaseService } from '@/lib/firebase/firebase.service';
+import { AppScanItem, RuleCheckItem } from '@/lib/mock-scans';
 
 type Language = 'en' | 'hi' | 'mr' | 'ta' | 'gu';
 
@@ -88,37 +89,74 @@ export default function CompliScanApp() {
 
   const isVerifiedUser = Boolean(currentUser && currentUser.emailVerified);
 
-  // Subscribe to Firebase Auth changes
-  useEffect(() => {
-    const unsubscribe = FirebaseAuthService.onAuthStateChange((user) => {
-      setCurrentUser(user);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // Load existing user scans from Firebase on mount (strictly only real user scans)
-  useEffect(() => {
-    async function loadFirebaseScans() {
+  // Fetch user scans from Firestore user-wise
+  const fetchUserScans = async (userId: string) => {
+    try {
+      const userScans = await FirebaseService.listUserScans(userId);
+      if (Array.isArray(userScans) && userScans.length > 0) {
+        setScans(userScans);
+        setSelectedScan(userScans[0]);
+      } else {
+        setScans([]);
+        setSelectedScan(null);
+      }
+    } catch (err) {
+      console.warn('User scans fetch error:', err);
       try {
-        const res = await fetch('/api/firebase-scans');
+        const res = await fetch(`/api/firebase-scans?userId=${userId}`);
         const json = await res.json();
         if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-          const fbScans: AppScanItem[] = json.data;
-          setScans(fbScans);
-          setSelectedScan(fbScans[0]);
+          setScans(json.data);
+          setSelectedScan(json.data[0]);
         } else {
           setScans([]);
           setSelectedScan(null);
         }
-      } catch (err) {
-        console.warn('Firebase scans fetch error:', err);
+      } catch (apiErr) {
+        console.warn('API user scans fetch error:', apiErr);
+        setScans([]);
+        setSelectedScan(null);
       }
     }
-    loadFirebaseScans();
+  };
+
+  // Subscribe to Firebase Auth changes
+  useEffect(() => {
+    const unsubscribe = FirebaseAuthService.onAuthStateChange(async (user) => {
+      setCurrentUser(user);
+      if (user) {
+        // Authenticated: load this specific user's scans from Firestore
+        await fetchUserScans(user.uid);
+      } else {
+        // Logged out: immediately clear scans & reports, and redirect to home screen
+        setScans([]);
+        setSelectedScan(null);
+        setActiveTab((prev) => (prev === 'history' || prev === 'reports' ? 'home' : prev));
+      }
+    });
+    return () => unsubscribe();
   }, []);
 
-  // Switch tab and scroll smoothly to top
+  // Centralized sign-out: clear state and show Home screen immediately
+  const handleSignOut = async () => {
+    try {
+      await FirebaseAuthService.signOut();
+    } catch (err) {
+      console.warn('Sign out error:', err);
+    }
+    setCurrentUser(null);
+    setScans([]);
+    setSelectedScan(null);
+    setActiveTab('home');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Switch tab with authentication protection for history and reports
   const handleTabChange = (tab: NavTabId) => {
+    if ((tab === 'history' || tab === 'reports') && !currentUser) {
+      handleRequireAuth('Please sign in to view your past product scans and statutory compliance reports.');
+      return;
+    }
     setActiveTab(tab);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -143,6 +181,10 @@ export default function CompliScanApp() {
       formData.append('file', file);
       formData.append('category', 'GENERIC_PACKAGED_COMMODITY');
       formData.append('locale', currentLanguage === 'hi' ? 'hi' : 'en');
+      if (currentUser?.uid) {
+        formData.append('userId', currentUser.uid);
+        formData.append('userEmail', currentUser.email || '');
+      }
 
       const res = await fetch('/api/scans', {
         method: 'POST',
@@ -284,9 +326,23 @@ export default function CompliScanApp() {
           countryOfOrigin: detectedOrigin,
           batchNo: detectedBatch,
         },
-        ruleChecks: ruleChecks.length > 0 ? ruleChecks : SAMPLE_FALLBACK_SCAN.ruleChecks,
+        ruleChecks: ruleChecks,
         imageUrl: URL.createObjectURL(file),
       };
+
+      // Persist directly to user-wise Firestore
+      if (currentUser?.uid) {
+        try {
+          await FirebaseService.saveUserScan(currentUser.uid, {
+            ...newScanItem,
+            timestamp: Date.now(),
+            userId: currentUser.uid,
+            userEmail: currentUser.email || undefined,
+          });
+        } catch (saveErr) {
+          console.warn('Failed to save to user Firestore directly:', saveErr);
+        }
+      }
 
       setScans((prev) => [newScanItem, ...prev]);
       setSelectedScan(newScanItem);
@@ -319,12 +375,15 @@ export default function CompliScanApp() {
     }
   };
 
-  // Clear App Data
+  // Clear App Data for current user
   const handleClearData = async () => {
-    try {
-      await fetch('/api/firebase-scans', { method: 'DELETE' });
-    } catch (err) {
-      console.warn('Failed to clear Firebase data:', err);
+    if (currentUser?.uid) {
+      try {
+        await FirebaseService.clearUserScans(currentUser.uid);
+        await fetch(`/api/firebase-scans?userId=${currentUser.uid}`, { method: 'DELETE' });
+      } catch (err) {
+        console.warn('Failed to clear Firebase data:', err);
+      }
     }
     setScans([]);
     setSelectedScan(null);
@@ -436,10 +495,7 @@ export default function CompliScanApp() {
                   setAuthRequiredMessage(undefined);
                   setIsAuthModalOpen(true);
                 }}
-                onSignOut={async () => {
-                  await FirebaseAuthService.signOut();
-                  setCurrentUser(null);
-                }}
+                onSignOut={handleSignOut}
                 onOpenGuidelinesModal={() => setIsGuidelinesOpen(true)}
                 onClearData={handleClearData}
               />
@@ -464,10 +520,7 @@ export default function CompliScanApp() {
             setAuthRequiredMessage(undefined);
             setIsAuthModalOpen(true);
           }}
-          onSignOut={async () => {
-            await FirebaseAuthService.signOut();
-            setCurrentUser(null);
-          }}
+          onSignOut={handleSignOut}
           onOpenGuidelinesModal={() => setIsGuidelinesOpen(true)}
         />
 
@@ -534,10 +587,7 @@ export default function CompliScanApp() {
                   setAuthRequiredMessage(undefined);
                   setIsAuthModalOpen(true);
                 }}
-                onSignOut={async () => {
-                  await FirebaseAuthService.signOut();
-                  setCurrentUser(null);
-                }}
+                onSignOut={handleSignOut}
                 onOpenGuidelinesModal={() => setIsGuidelinesOpen(true)}
                 onClearData={handleClearData}
               />

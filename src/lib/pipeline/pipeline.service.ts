@@ -17,6 +17,8 @@ export interface ScanPipelineOptions {
   offlineClientId?: string;
   locale?: 'en' | 'hi';
   scenarioId?: string;
+  userId?: string;
+  userEmail?: string;
 }
 
 export class CompliScanPipeline {
@@ -246,6 +248,8 @@ export class CompliScanPipeline {
           manufacturer: detectedMfg,
           scannedAt: formattedDate,
           timestamp: Date.now(),
+          userId: options.userId,
+          userEmail: options.userEmail,
           status:
             report.overallStatus === 'COMPLIANT'
               ? 'COMPLIANT'

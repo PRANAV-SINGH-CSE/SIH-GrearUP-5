@@ -33,7 +33,7 @@ export function HistoryScreen({
     const compliant = scans.filter((s) => s.status === 'COMPLIANT').length;
     const nonCompliant = scans.filter((s) => s.status === 'NON_COMPLIANT').length;
     const needsReview = scans.filter((s) => s.status === 'NEEDS_REVIEW').length;
-    const notApplicable = 1;
+    const notApplicable = scans.filter((s) => (s.status as string) === 'NOT_APPLICABLE').length;
     return { total, compliant, nonCompliant, needsReview, notApplicable };
   }, [scans]);
 

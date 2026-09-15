@@ -13,6 +13,8 @@ export async function POST(request: NextRequest) {
     let rulesetVersion = 'LMPC-2011.v2026';
     let offlineClientId: string | undefined;
     let locale: 'en' | 'hi' = 'en';
+    let userId: string | undefined;
+    let userEmail: string | undefined;
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData();
@@ -38,6 +40,12 @@ export async function POST(request: NextRequest) {
       if (formData.has('locale')) {
         locale = (formData.get('locale') as string) === 'hi' ? 'hi' : 'en';
       }
+      if (formData.has('userId')) {
+        userId = formData.get('userId') as string;
+      }
+      if (formData.has('userEmail')) {
+        userEmail = formData.get('userEmail') as string;
+      }
     } else if (contentType.includes('application/json')) {
       const json = await request.json();
       if (!json.image) {
@@ -53,6 +61,8 @@ export async function POST(request: NextRequest) {
       rulesetVersion = json.rulesetVersion || rulesetVersion;
       offlineClientId = json.offlineClientId;
       locale = json.locale === 'hi' ? 'hi' : 'en';
+      userId = json.userId;
+      userEmail = json.userEmail;
     } else {
       throw new AppError(
         'UNSUPPORTED_CONTENT_TYPE',
@@ -67,6 +77,8 @@ export async function POST(request: NextRequest) {
       rulesetVersion,
       offlineClientId,
       locale,
+      userId,
+      userEmail,
     });
 
     return NextResponse.json(
