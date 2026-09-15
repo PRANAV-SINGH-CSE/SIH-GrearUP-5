@@ -13,6 +13,8 @@ import {
   signOut,
   updateProfile,
   onAuthStateChanged,
+  initializeAuth,
+  indexedDBLocalPersistence,
   browserLocalPersistence,
   setPersistence,
 } from 'firebase/auth';
@@ -36,10 +38,16 @@ export function getFirebaseAuth(): Auth {
   }
   if (!authInstance) {
     const app = getClientFirebaseApp();
-    authInstance = getAuth(app);
-    setPersistence(authInstance, browserLocalPersistence).catch((err) => {
-      console.warn('Firebase setPersistence error:', err);
-    });
+    try {
+      authInstance = initializeAuth(app, {
+        persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+      });
+    } catch {
+      authInstance = getAuth(app);
+      setPersistence(authInstance, browserLocalPersistence).catch((err) => {
+        console.warn('Firebase setPersistence error:', err);
+      });
+    }
   }
   return authInstance;
 }

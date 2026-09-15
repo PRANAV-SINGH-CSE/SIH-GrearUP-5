@@ -113,6 +113,8 @@ export default function Home() {
         setScans(cachedScans);
         setSelectedScan(cachedScans[0]);
       }
+      // Re-fetch scans in background to ensure fresh data
+      fetchUserScans(cachedUser.uid);
     }
   }, []);
 
@@ -181,8 +183,9 @@ export default function Home() {
         AuthCacheService.saveUser(user);
         await fetchUserScans(user.uid);
       } else {
-        // If user explicitly signed out or no cached profile exists, clear session
-        if (AuthCacheService.isExplicitlyLoggedOut() || !AuthCacheService.getCachedUser()) {
+        // ONLY log out if the user explicitly clicked "Sign Out"!
+        // Do NOT log out during cold-start, offline launches, or app restarts!
+        if (AuthCacheService.isExplicitlyLoggedOut()) {
           setCurrentUser(null);
           setScans([]);
           setSelectedScan(null);
@@ -192,6 +195,11 @@ export default function Home() {
           const cachedUser = AuthCacheService.getCachedUser();
           if (cachedUser) {
             setCurrentUser(cachedUser);
+            const cachedScans = AuthCacheService.getCachedScans(cachedUser.uid);
+            if (cachedScans.length > 0) {
+              setScans(cachedScans);
+              setSelectedScan((curr) => curr || cachedScans[0]);
+            }
           }
         }
       }
@@ -665,7 +673,13 @@ export default function Home() {
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         currentUser={currentUser}
-        onUserChange={(user) => setCurrentUser(user)}
+        onUserChange={(user) => {
+          setCurrentUser(user);
+          if (user) {
+            AuthCacheService.saveUser(user);
+            fetchUserScans(user.uid);
+          }
+        }}
         requiredActionMessage={authRequiredMessage}
       />
 
