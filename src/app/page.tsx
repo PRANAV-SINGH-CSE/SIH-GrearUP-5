@@ -120,6 +120,19 @@ export default function CompliScanApp() {
     }
   };
 
+  // Dismiss instant splash preloader as soon as React mounts
+  useEffect(() => {
+    const preloader = document.getElementById('compliscan-preloader');
+    if (preloader) {
+      preloader.style.opacity = '0';
+      preloader.style.pointerEvents = 'none';
+      const timer = setTimeout(() => {
+        preloader.remove();
+      }, 380);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
   // Subscribe to Firebase Auth changes
   useEffect(() => {
     const unsubscribe = FirebaseAuthService.onAuthStateChange(async (user) => {
@@ -448,7 +461,7 @@ export default function CompliScanApp() {
           )}
 
           {/* Main Content Viewport */}
-          <main className="flex-1 px-4 pt-5 pb-36 sm:pb-40 overflow-y-auto">
+          <main className="flex-1 px-4 pt-6 pb-36 sm:pb-40 overflow-y-auto">
             {activeTab === 'home' && (
               <HomeScreen
                 onOpenScanningCamera={() => setIsCameraOpen(true)}

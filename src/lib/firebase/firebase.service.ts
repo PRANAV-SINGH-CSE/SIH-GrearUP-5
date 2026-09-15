@@ -94,12 +94,16 @@ export class FirebaseService {
   static async saveUserScan(userId: string, scan: FirebaseScanRecord): Promise<void> {
     if (!userId) return;
 
+    // Strip image so only the report and extracted data are stored in database
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { imageUrl, ...reportData } = scan;
+
     // 1. Save to Cloud Firestore
     try {
       const db = getFirebaseFirestore();
       const scanDoc = doc(db, 'users', userId, 'scans', scan.id);
       await setDoc(scanDoc, {
-        ...scan,
+        ...reportData,
         userId,
         updatedAt: Date.now(),
       });
@@ -112,7 +116,7 @@ export class FirebaseService {
       const rtdb = getFirebaseDb();
       const scanRef = ref(rtdb, `users/${userId}/scans/${scan.id}`);
       await set(scanRef, {
-        ...scan,
+        ...reportData,
         userId,
         updatedAt: Date.now(),
       });

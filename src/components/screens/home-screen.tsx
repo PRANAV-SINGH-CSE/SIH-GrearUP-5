@@ -266,7 +266,7 @@ export function HomeScreen({
       {/* ========================================================================= */}
       <div className="lg:hidden flex flex-col gap-5 pb-24 animate-in fade-in duration-150">
         {/* Mobile Hero Section */}
-        <div className="pt-2 px-1 flex items-start justify-between">
+        <div className="pt-4 sm:pt-3 px-1 flex items-start justify-between">
           <div className="flex-1 pr-2">
             <h1 className="text-3xl sm:text-4xl font-black tracking-tight leading-none text-slate-900">
               Compli<span className="text-blue-600">Scan</span>

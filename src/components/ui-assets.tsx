@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 
 /**
  * State Emblem of India (Lion Capital of Ashoka)
@@ -464,7 +464,23 @@ export function ProductImageThumbnail({
   imageUrl?: string;
   className?: string;
 }) {
+  const [imgError, setImgError] = useState(false);
   const name = (productName || '').toLowerCase();
+
+  // If there's an actual uploaded image URL and it hasn't failed to load
+  if (imageUrl && !imgError && !imageUrl.startsWith('data:image/svg')) {
+    return (
+      <div className={`relative flex items-center justify-center shrink-0 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 ${className}`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imageUrl}
+          alt=""
+          onError={() => setImgError(true)}
+          className="w-full h-full object-cover"
+        />
+      </div>
+    );
+  }
 
   if (name.includes("lay's") || name.includes('lays') || name.includes('potato') || name.includes('salted')) {
     return <LaysThumbnail className={className} />;
@@ -484,24 +500,33 @@ export function ProductImageThumbnail({
   if (name.includes('dettol') || name.includes('antiseptic')) {
     return <DettolThumbnail className={className} />;
   }
-
-  // If there's an actual uploaded image URL, display it
-  if (imageUrl && !imageUrl.startsWith('data:image/svg')) {
+  if (name.includes('kurkure') || name.includes('namkeen') || name.includes('snack') || name.includes('chips')) {
     return (
-      <div className={`relative flex items-center justify-center shrink-0 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 ${className}`}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={imageUrl} alt={productName} className="w-full h-full object-cover" />
+      <div className={`relative flex flex-col items-center justify-center shrink-0 rounded-xl bg-gradient-to-br from-amber-50 to-orange-100/80 border border-amber-200/80 shadow-2xs ${className}`}>
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-amber-600 to-orange-500 text-white flex items-center justify-center font-black text-sm shadow-2xs mb-0.5">
+          🍿
+        </div>
+        <span className="text-[9px] font-black text-orange-800 tracking-tight">KURKURE</span>
       </div>
     );
   }
 
-  // Fallback generic product icon
+  // Fallback generic product packaging icon with product initials badge
+  const initials = (productName || 'PC')
+    .replace(/[^a-zA-Z0-9 ]/g, '')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase() || 'PC';
+
   return (
-    <div className={`relative flex items-center justify-center shrink-0 rounded-xl bg-blue-50 border border-blue-100 ${className}`}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" className="w-7 h-7">
-        <rect x="4" y="3" width="16" height="18" rx="2" />
-        <path d="M9 7h6M9 11h6M9 15h4" />
-      </svg>
+    <div className={`relative flex flex-col items-center justify-center shrink-0 rounded-xl bg-gradient-to-br from-blue-50 to-slate-100 border border-blue-200/80 shadow-2xs ${className}`}>
+      <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-2xs mb-0.5">
+        {initials}
+      </div>
+      <span className="text-[9px] font-bold text-blue-800 tracking-tight">PACK</span>
     </div>
   );
 }
