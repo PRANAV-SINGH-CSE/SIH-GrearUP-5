@@ -1108,20 +1108,15 @@ export function ReportScreen({
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-1 shrink-0">
-                    <span className={`text-xs font-semibold ${
-                      rule.status === 'COMPLIANT'
-                        ? 'text-emerald-600'
-                        : rule.status === 'NON_COMPLIANT'
-                        ? 'text-red-600'
-                        : 'text-amber-600'
-                    }`}>
-                      {rule.statusLabel}
-                    </span>
-                    <svg className="w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <polyline points="9 18 15 12 9 6" />
-                    </svg>
-                  </div>
+                  <span className={`text-xs font-semibold shrink-0 ${
+                    rule.status === 'COMPLIANT'
+                      ? 'text-emerald-600'
+                      : rule.status === 'NON_COMPLIANT'
+                      ? 'text-red-600'
+                      : 'text-amber-600'
+                  }`}>
+                    {rule.statusLabel}
+                  </span>
                 </div>
               ))}
             </div>
