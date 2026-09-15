@@ -13,6 +13,13 @@
   color-scheme: dark;
 }
 
+html,
+body {
+  overscroll-behavior: none;
+  overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: touch;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
