@@ -11,8 +11,8 @@ export interface BottomNavProps {
 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-md">
-      <div className="max-w-lg mx-auto grid grid-cols-4 h-16 relative">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-lg pb-[max(0.6rem,env(safe-area-inset-bottom,0px))]">
+      <div className="max-w-lg mx-auto grid grid-cols-4 h-16 pt-1 pb-1 relative">
         {/* Tab 1: Home */}
         <button
           type="button"

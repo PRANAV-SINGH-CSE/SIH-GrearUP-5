@@ -33,7 +33,7 @@ export function AppHeader({ currentLanguage, onLanguageChange }: AppHeaderProps)
   }, []);
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-sm border-b border-slate-100 px-4 py-3 flex items-center justify-between shadow-xs">
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-sm border-b border-slate-100 px-4 pt-5 pb-3.5 sm:pt-4 sm:pb-3 flex items-center justify-between shadow-xs">
       {/* Left: Emblem & Department Info */}
       <div className="flex items-center gap-3">
         <NationalEmblem className="w-9 h-11" />

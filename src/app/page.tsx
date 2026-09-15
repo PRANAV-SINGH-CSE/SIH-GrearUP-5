@@ -448,7 +448,7 @@ export default function CompliScanApp() {
           )}
 
           {/* Main Content Viewport */}
-          <main className="flex-1 px-4 pt-3 pb-24 overflow-y-auto">
+          <main className="flex-1 px-4 pt-5 pb-36 sm:pb-40 overflow-y-auto">
             {activeTab === 'home' && (
               <HomeScreen
                 onOpenScanningCamera={() => setIsCameraOpen(true)}
