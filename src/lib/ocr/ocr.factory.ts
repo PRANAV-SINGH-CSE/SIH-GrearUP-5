@@ -1,7 +1,9 @@
 import { IOCRProvider } from './ocr.interface';
 import { MockOCRProvider } from './mock-ocr.provider';
 import { GeminiOCRProvider } from './gemini-ocr.provider';
+import { NovaOCRProvider } from './nova-ocr.provider';
 import { GEMINI_API_KEYS } from '../gemini/gemini-client';
+import { isNovaConfigured } from '../ai/openai-client';
 
 let ocrInstance: IOCRProvider | null = null;
 
@@ -11,13 +13,15 @@ export function getOCRProvider(forceType?: string): IOCRProvider {
   }
 
   const isTest = process.env.NODE_ENV === 'test';
-  const providerType =
-    forceType ||
-    process.env.OCR_PROVIDER ||
-    (!isTest && GEMINI_API_KEYS.length > 0 ? 'gemini' : 'mock');
+
+  // Nova (AICredits) takes priority when its API key is configured,
+  // regardless of OCR_PROVIDER env var
+  if ((forceType === 'nova' || !forceType) && !isTest && isNovaConfigured()) {
+    ocrInstance = new NovaOCRProvider();
+    return ocrInstance;
+  }
 
   if (
-    providerType === 'gemini' &&
     !isTest &&
     (GEMINI_API_KEYS.length > 0 || process.env.GEMINI_API_KEY)
   ) {

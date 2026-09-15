@@ -4,7 +4,9 @@ import { IAIExtractionProvider } from './extraction.interface';
 import { DeterministicExtractor } from './deterministic.extractor';
 import { MockAIExtractionProvider } from './mock-ai.extractor';
 import { GeminiAIExtractionProvider } from './gemini-ai.extractor';
+import { NovaAIExtractionProvider } from './nova-ai.extractor';
 import { GEMINI_API_KEYS } from '../gemini/gemini-client';
+import { isNovaConfigured } from '../ai/openai-client';
 
 export class ExtractionService {
   private aiProvider: IAIExtractionProvider;
@@ -14,12 +16,12 @@ export class ExtractionService {
       this.aiProvider = aiProvider;
     } else {
       const isTest = process.env.NODE_ENV === 'test';
-      const providerType =
-        process.env.AI_PROVIDER ||
-        (!isTest && GEMINI_API_KEYS.length > 0 ? 'gemini' : 'mock');
 
-      if (
-        providerType === 'gemini' &&
+      // Nova (AICredits) takes priority when its API key is configured,
+      // regardless of AI_PROVIDER env var
+      if (!isTest && isNovaConfigured()) {
+        this.aiProvider = new NovaAIExtractionProvider();
+      } else if (
         !isTest &&
         (GEMINI_API_KEYS.length > 0 || process.env.GEMINI_API_KEY)
       ) {
@@ -41,6 +43,15 @@ export class ExtractionService {
     imageBuffer?: Buffer,
     mimeType?: string
   ): Promise<ProductDeclaration> {
+    if (this.aiProvider.name === 'nova') {
+      try {
+        return await this.aiProvider.extractDeclarations(ocrResult, categoryHint, imageBuffer, mimeType);
+      } catch (err) {
+        console.warn('Nova extraction failed, falling back to Deterministic:', err);
+        return DeterministicExtractor.extract(ocrResult);
+      }
+    }
+
     if (this.aiProvider.name === 'gemini') {
       try {
         return await this.aiProvider.extractDeclarations(ocrResult, categoryHint, imageBuffer, mimeType);

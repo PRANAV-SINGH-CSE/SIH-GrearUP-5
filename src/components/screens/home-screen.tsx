@@ -36,40 +36,42 @@ export function HomeScreen({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleOpenCam = () => {
-    if (!isVerifiedUser) {
-      onRequireAuth('Verified user sign-in required to capture and scan commodity labels.');
-      return;
-    }
     onOpenScanningCamera();
   };
 
   const handleUploadClick = () => {
-    if (!isVerifiedUser) {
-      onRequireAuth('Verified user sign-in required to upload and scan commodity labels.');
-      return;
-    }
     fileInputRef.current?.click();
   };
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (!isVerifiedUser) {
-        onRequireAuth('Verified user sign-in required to upload and scan commodity labels.');
-        return;
-      }
       onImageFileSelected(file);
     }
   };
 
   return (
     <>
-      {/* Hidden file input shared between mobile & desktop */}
+      {/* Offscreen file input - reliably accessible across all Android WebViews and mobile browsers */}
       <input
+        id="global-product-image-upload"
         ref={fileInputRef}
         type="file"
-        accept="image/*"
-        className="hidden"
+        accept="image/jpeg,image/png,image/webp,image/*"
+        tabIndex={-1}
+        style={{
+          position: 'fixed',
+          top: '-9999px',
+          left: '-9999px',
+          opacity: 0,
+          width: '1px',
+          height: '1px',
+          pointerEvents: 'none',
+        }}
+        onClick={(e) => {
+          // Reset value on click so selecting the same file triggers onChange
+          (e.target as HTMLInputElement).value = '';
+        }}
         onChange={handleFileInput}
       />
 
@@ -117,12 +119,12 @@ export function HomeScreen({
                 </svg>
               </button>
 
-              {/* Upload Image Button */}
-              <button
-                type="button"
-                onClick={handleUploadClick}
-                disabled={isProcessing}
-                className="flex items-center gap-2.5 px-6 py-3.5 rounded-xl bg-white hover:bg-slate-50 text-blue-600 font-bold text-sm border-2 border-blue-200 hover:border-blue-400 shadow-xs transition-all cursor-pointer hover:translate-y-[-1px]"
+              {/* Upload Image Label/Button */}
+              <label
+                htmlFor="global-product-image-upload"
+                className={`flex items-center gap-2.5 px-6 py-3.5 rounded-xl bg-white hover:bg-slate-50 text-blue-600 font-bold text-sm border-2 border-blue-200 hover:border-blue-400 shadow-xs transition-all cursor-pointer hover:translate-y-[-1px] ${
+                  isProcessing ? 'opacity-50 pointer-events-none' : ''
+                }`}
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -133,7 +135,7 @@ export function HomeScreen({
                 <svg className="w-4 h-4 ml-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
-              </button>
+              </label>
             </div>
 
             {/* Processing Indicator */}
@@ -334,11 +336,11 @@ export function HomeScreen({
               <span>Open Camera</span>
             </button>
 
-            <button
-              type="button"
-              onClick={handleUploadClick}
-              disabled={isProcessing}
-              className="w-full sm:w-auto min-w-[150px] flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-white hover:bg-blue-50/50 text-blue-600 font-semibold text-sm border border-blue-300 shadow-xs transition-colors cursor-pointer"
+            <label
+              htmlFor="global-product-image-upload"
+              className={`w-full sm:w-auto min-w-[150px] flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-white hover:bg-blue-50/50 text-blue-600 font-semibold text-sm border border-blue-300 shadow-xs transition-colors cursor-pointer ${
+                isProcessing ? 'opacity-50 pointer-events-none' : ''
+              }`}
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -346,7 +348,7 @@ export function HomeScreen({
                 <polyline points="21 15 16 10 5 21" />
               </svg>
               <span>Upload Image</span>
-            </button>
+            </label>
           </div>
 
           {/* Processing Indicator */}

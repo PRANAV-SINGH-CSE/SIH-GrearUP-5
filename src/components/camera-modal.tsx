@@ -119,9 +119,21 @@ export function CameraModal({ isOpen, onClose, onCapture }: CameraModalProps) {
                 Select from Device Files
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp,image/*"
                   capture="environment"
-                  className="hidden"
+                  tabIndex={-1}
+                  style={{
+                    position: 'fixed',
+                    top: '-9999px',
+                    left: '-9999px',
+                    opacity: 0,
+                    width: '1px',
+                    height: '1px',
+                    pointerEvents: 'none',
+                  }}
+                  onClick={(e) => {
+                    (e.target as HTMLInputElement).value = '';
+                  }}
                   onChange={(e) => {
                     const f = e.target.files?.[0];
                     if (f) {
@@ -194,8 +206,20 @@ export function CameraModal({ isOpen, onClose, onCapture }: CameraModalProps) {
           </svg>
           <input
             type="file"
-            accept="image/*"
-            className="hidden"
+            accept="image/jpeg,image/png,image/webp,image/*"
+            tabIndex={-1}
+            style={{
+              position: 'fixed',
+              top: '-9999px',
+              left: '-9999px',
+              opacity: 0,
+              width: '1px',
+              height: '1px',
+              pointerEvents: 'none',
+            }}
+            onClick={(e) => {
+              (e.target as HTMLInputElement).value = '';
+            }}
             onChange={(e) => {
               const f = e.target.files?.[0];
               if (f) {

@@ -1,3 +1,4 @@
+import path from 'path';
 import { IScanRepository } from '../repository/repository.interface';
 import { IStorageProvider } from '../storage/storage.interface';
 import { IOCRProvider } from '../ocr/ocr.interface';
@@ -50,9 +51,50 @@ export class CompliScanPipeline {
       locale = 'en',
     } = options;
 
-    // 1. Validate upload (MIME type, size, corruption)
-    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
-    if (!allowedMimeTypes.includes(mimeType.toLowerCase())) {
+    // 1. Validate and normalize upload MIME type (with magic bytes inspection)
+    let effectiveMimeType = (mimeType || '').toLowerCase();
+    if (
+      !effectiveMimeType ||
+      effectiveMimeType === 'application/octet-stream' ||
+      !effectiveMimeType.startsWith('image/')
+    ) {
+      if (
+        imageBuffer.length >= 3 &&
+        imageBuffer[0] === 0xff &&
+        imageBuffer[1] === 0xd8 &&
+        imageBuffer[2] === 0xff
+      ) {
+        effectiveMimeType = 'image/jpeg';
+      } else if (
+        imageBuffer.length >= 8 &&
+        imageBuffer[0] === 0x89 &&
+        imageBuffer[1] === 0x50 &&
+        imageBuffer[2] === 0x4e &&
+        imageBuffer[3] === 0x47
+      ) {
+        effectiveMimeType = 'image/png';
+      } else if (
+        imageBuffer.length >= 12 &&
+        imageBuffer.toString('ascii', 0, 4) === 'RIFF' &&
+        imageBuffer.toString('ascii', 8, 12) === 'WEBP'
+      ) {
+        effectiveMimeType = 'image/webp';
+      } else {
+        const ext = path.extname(filename).toLowerCase();
+        if (ext === '.png') effectiveMimeType = 'image/png';
+        else if (ext === '.webp') effectiveMimeType = 'image/webp';
+        else effectiveMimeType = 'image/jpeg';
+      }
+    }
+
+    if (effectiveMimeType === 'image/jpg' || effectiveMimeType === 'image/pjpeg' || effectiveMimeType === 'image/jfif') {
+      effectiveMimeType = 'image/jpeg';
+    } else if (effectiveMimeType === 'image/x-png') {
+      effectiveMimeType = 'image/png';
+    }
+
+    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+    if (!allowedMimeTypes.includes(effectiveMimeType)) {
       throw new AppError(
         'INVALID_IMAGE_FORMAT',
         `Unsupported image format: ${mimeType}. Please upload JPEG, PNG, or WebP.`,
@@ -130,11 +172,17 @@ export class CompliScanPipeline {
           FOOD_PRODUCT_WITH_EXPIRY: 1,
         }).find((s) => filename.toUpperCase().includes(s));
 
-      const ocrResult = await this.ocr.extractText(
-        preprocessed.processedBuffer,
-        'image/png',
-        { scenarioId: determinedScenarioId }
-      );
+      let ocrResult;
+      try {
+        ocrResult = await this.ocr.extractText(
+          preprocessed.processedBuffer,
+          'image/png',
+          { scenarioId: determinedScenarioId }
+        );
+      } catch (ocrErr) {
+        Logger.warn('OCR extraction failed', { scanId, error: String(ocrErr) });
+        throw ocrErr;
+      }
       ocrResult.durationMs = Date.now() - ocrStartTime;
       await this.repository.saveOCRResult(scanId, ocrResult);
 

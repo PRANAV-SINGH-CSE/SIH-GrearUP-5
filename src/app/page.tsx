@@ -15,6 +15,7 @@ import { AuthModal } from '@/components/auth-modal';
 import { FirebaseAuthService } from '@/lib/firebase/auth.service';
 import { FirebaseService } from '@/lib/firebase/firebase.service';
 import { AppScanItem, RuleCheckItem } from '@/lib/mock-scans';
+import { compressImageForUpload } from '@/lib/utils/client-image';
 
 type Language = 'en' | 'hi' | 'mr' | 'ta' | 'gu';
 
@@ -28,7 +29,8 @@ interface ApiScanResponse {
     };
     report: {
       reportId?: string;
-      overallStatus: 'COMPLIANT' | 'NON_COMPLIANT' | 'COMPLIANT_WITH_WARNINGS' | 'NEEDS_REVIEW';
+      overallStatus: string;
+      overallStatusLabel?: string;
       statusExplanation?: string;
       productInformation?: {
         productName?: string;
@@ -36,28 +38,33 @@ interface ApiScanResponse {
         category?: string;
         manufacturerOrPacker?: string;
       };
+      summary?: {
+        passed: number;
+        failed: number;
+        warning: number;
+        notApplicable: number;
+      };
       extractedDeclarations?: {
-        productName?: { value?: string; confidence?: number; rawText?: string };
-        genericName?: { value?: string; confidence?: number; rawText?: string };
-        manufacturer?: { value?: { name?: string; address?: string }; confidence?: number };
-        packer?: { value?: { name?: string; address?: string }; confidence?: number };
-        importer?: { value?: { name?: string; address?: string }; confidence?: number };
-        netQuantity?: { value?: { value?: number; unit?: string; rawUnit?: string; isValidUnit?: boolean }; rawText?: string };
-        mrp?: { value?: { amount?: number; currency?: string; isTaxInclusive?: boolean; rawWording?: string }; rawText?: string };
-        unitSalePrice?: { value?: { amount?: number; perUnit?: string; currency?: string } };
-        countryOfOrigin?: { value?: string; rawText?: string };
+        productName?: { value?: string };
+        genericName?: { value?: string };
+        manufacturer?: { value?: { name?: string; address?: string } };
+        packer?: { value?: { name?: string; address?: string } };
+        importer?: { value?: { name?: string; address?: string } };
+        netQuantity?: { value?: { value?: number; unit?: string }; rawText?: string };
+        mrp?: { value?: { amount?: number; isTaxInclusive?: boolean }; rawText?: string };
         manufactureDate?: { value?: { month?: number; year?: number; rawText?: string } };
         packingDate?: { value?: { month?: number; year?: number; rawText?: string } };
+        expiryDate?: { value?: string | { day?: number; month?: number; year?: number; rawText?: string; isoString?: string; isAmbiguous?: boolean } };
         bestBefore?: { value?: string };
-        expiryDate?: { value?: string };
-        consumerCare?: { value?: { name?: string; phone?: string; email?: string; address?: string } };
+        countryOfOrigin?: { value?: string };
+        consumerCare?: { value?: { phone?: string; email?: string; address?: string } };
         batchNumber?: { value?: string };
       };
       findings?: {
+        violations?: Array<{ name?: string; ruleName?: string; legalReference?: string; localizedExplanation?: string; message?: string }>;
+        warnings?: Array<{ name?: string; ruleName?: string; legalReference?: string; localizedExplanation?: string; message?: string }>;
+        passedRules?: Array<{ name?: string; ruleName?: string; legalReference?: string; localizedExplanation?: string }>;
         passed?: Array<{ name?: string; ruleName?: string; legalReference?: string; ruleId?: string; message?: string; localizedExplanation?: string }>;
-        violations?: Array<{ name?: string; ruleName?: string; legalReference?: string; ruleId?: string; message?: string; localizedExplanation?: string }>;
-        warnings?: Array<{ name?: string; ruleName?: string; legalReference?: string; ruleId?: string; message?: string; localizedExplanation?: string }>;
-        notApplicable?: Array<{ name?: string; ruleName?: string }>;
       };
       counts?: {
         passed: number;
@@ -68,17 +75,18 @@ interface ApiScanResponse {
     };
   };
   error?: {
+    code?: string;
     message: string;
   };
 }
 
-export default function CompliScanApp() {
+export default function Home() {
   const [activeTab, setActiveTab] = useState<NavTabId>('home');
-  const [currentLanguage, setCurrentLanguage] = useState<Language>('en');
   const [scans, setScans] = useState<AppScanItem[]>([]);
   const [selectedScan, setSelectedScan] = useState<AppScanItem | null>(null);
-  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [currentLanguage, setCurrentLanguage] = useState<Language>('en');
   const [isGuidelinesOpen, setIsGuidelinesOpen] = useState(false);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -87,7 +95,7 @@ export default function CompliScanApp() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authRequiredMessage, setAuthRequiredMessage] = useState<string | undefined>(undefined);
 
-  const isVerifiedUser = Boolean(currentUser && currentUser.emailVerified);
+  const isVerifiedUser = Boolean(currentUser);
 
   // Fetch user scans from Firestore user-wise
   const fetchUserScans = async (userId: string) => {
@@ -180,16 +188,13 @@ export default function CompliScanApp() {
   };
 
   // Handle image capture from live camera or file input
-  const handleProcessScanFile = async (file: File) => {
-    if (!isVerifiedUser) {
-      handleRequireAuth('Verified user authentication is required to upload and scan packaged commodity labels.');
-      return;
-    }
-
+  const handleProcessScanFile = async (rawFile: File) => {
     setIsProcessing(true);
     setErrorMessage(null);
 
     try {
+      // Compress image client-side to ensure ultra-fast uploads on mobile (< 1.5MB)
+      const file = await compressImageForUpload(rawFile);
       const formData = new FormData();
       formData.append('file', file);
       formData.append('category', 'GENERIC_PACKAGED_COMMODITY');
@@ -290,8 +295,12 @@ export default function CompliScanApp() {
           ? `${String(decl.manufactureDate.value.month).padStart(2, '0')}/${decl.manufactureDate.value.year}`
           : decl.packingDate?.value?.rawText || 'Recent');
 
+      const expiryVal = decl.expiryDate?.value;
+      const expiryString = typeof expiryVal === 'string'
+        ? expiryVal
+        : (expiryVal?.rawText || expiryVal?.isoString || null);
       const detectedBestBefore =
-        decl.bestBefore?.value || decl.expiryDate?.value || 'Within shelf life';
+        decl.bestBefore?.value || expiryString || 'Within shelf life';
 
       const detectedOrigin = decl.countryOfOrigin?.value || 'India';
       const detectedBatch = decl.batchNumber?.value || `B-${Date.now().toString().slice(-4)}`;
@@ -370,11 +379,6 @@ export default function CompliScanApp() {
 
   // Preset selector
   const handleQuickPresetSelect = async (presetId: string) => {
-    if (!isVerifiedUser) {
-      handleRequireAuth('Verified user sign-in required to run scan simulations.');
-      return;
-    }
-
     setIsProcessing(true);
     try {
       const syntheticBlob = new Blob([`[SYNTHETIC_TEST_DATASET:${presetId}]`], {
@@ -418,7 +422,7 @@ export default function CompliScanApp() {
           {/* User Status Bar (Shows sign-in banner if guest) */}
           {!currentUser ? (
             <div className="bg-slate-50 border-b border-slate-200/70 px-4 py-2 flex items-center justify-between text-xs">
-              <span className="text-slate-600 font-medium">Guest Mode (Read-only)</span>
+              <span className="text-slate-600 font-medium">Guest Mode</span>
               <button
                 type="button"
                 onClick={() => {
@@ -427,21 +431,7 @@ export default function CompliScanApp() {
                 }}
                 className="text-blue-600 hover:text-blue-800 font-bold cursor-pointer"
               >
-                Sign In to Scan &rarr;
-              </button>
-            </div>
-          ) : !currentUser.emailVerified ? (
-            <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between text-xs text-amber-800">
-              <span className="font-semibold truncate mr-2">⚠️ Email unverified: {currentUser.email}</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthRequiredMessage('Please verify your email address to unlock upload and search features.');
-                  setIsAuthModalOpen(true);
-                }}
-                className="text-amber-900 underline font-bold shrink-0 cursor-pointer"
-              >
-                Verify Now
+                Sign In to Save Scans &rarr;
               </button>
             </div>
           ) : null}
