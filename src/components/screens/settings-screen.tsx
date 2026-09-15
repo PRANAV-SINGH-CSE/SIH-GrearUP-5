@@ -5,6 +5,10 @@ import { User } from 'firebase/auth';
 
 export interface SettingsScreenProps {
   currentUser: User | null;
+  currentLanguage: 'en' | 'hi' | 'mr' | 'ta' | 'gu';
+  onLanguageChange: (language: 'en' | 'hi' | 'mr' | 'ta' | 'gu') => void;
+  themePreference: 'light' | 'dark' | 'system';
+  onThemeChange: (theme: 'light' | 'dark' | 'system') => void;
   onOpenAuthModal: () => void;
   onSignOut: () => void;
   onOpenGuidelinesModal: () => void;
@@ -13,6 +17,10 @@ export interface SettingsScreenProps {
 
 export function SettingsScreen({
   currentUser,
+  currentLanguage,
+  onLanguageChange,
+  themePreference,
+  onThemeChange,
   onOpenAuthModal,
   onSignOut,
   onOpenGuidelinesModal,
@@ -35,6 +43,20 @@ export function SettingsScreen({
   const userInitial = (currentUser?.displayName?.[0] || currentUser?.email?.[0] || 'U').toUpperCase();
   const userDisplayName = currentUser?.displayName || (currentUser?.email ? currentUser.email.split('@')[0] : 'Guest User');
   const userEmail = currentUser?.email || 'Not signed in';
+  const languageLabel = currentLanguage === 'hi' ? 'हिंदी (Hindi)' : 'English (EN)';
+  const themeLabel = themePreference === 'system' ? 'System Default' : themePreference === 'dark' ? 'Dark' : 'Light';
+
+  const chooseLanguage = (language: 'en' | 'hi') => {
+    onLanguageChange(language);
+    setModalType(null);
+    showToast(`Language changed to ${language === 'hi' ? 'Hindi' : 'English'}`);
+  };
+
+  const chooseTheme = (theme: 'light' | 'dark' | 'system') => {
+    onThemeChange(theme);
+    setModalType(null);
+    showToast(`${theme === 'system' ? 'System default' : theme[0].toUpperCase() + theme.slice(1)} theme enabled`);
+  };
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-150">
@@ -74,7 +96,7 @@ export function SettingsScreen({
               <div className="flex items-center gap-1.5 mt-1">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                 <span className="text-[10px] font-semibold text-slate-500">
-                  Department of Consumer Affairs, Government of India
+                  Department of Consumer Affairs, Lovely Professional University
                 </span>
               </div>
             </div>
@@ -188,7 +210,7 @@ export function SettingsScreen({
                     <span className="font-bold text-slate-900 block">System Language</span>
                     <span className="text-[11px] text-slate-500 block">Report generation and UI localization</span>
                   </div>
-                  <span className="font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg">English (EN)</span>
+                  <span className="font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg">{languageLabel}</span>
                 </div>
 
                 {/* Notifications */}
@@ -221,7 +243,7 @@ export function SettingsScreen({
                     <span className="font-bold text-slate-900 block">Color Theme</span>
                     <span className="text-[11px] text-slate-500 block">Light / Dark / High-Contrast System Default</span>
                   </div>
-                  <span className="font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg">System Default</span>
+                  <span className="font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg">{themeLabel}</span>
                 </div>
               </div>
             </div>
@@ -547,7 +569,7 @@ export function SettingsScreen({
       {/* Section 2: App Preferences */}
       <div className="space-y-1.5">
         <h2 className="text-xs font-bold text-slate-900 px-1">App Preferences</h2>
-        <div className="rounded-2xl bg-white border border-slate-200/80 divide-y divide-slate-100 shadow-2xs">
+        <div className="overflow-hidden rounded-2xl bg-white border border-slate-200/80 divide-y divide-slate-100 shadow-2xs">
           {/* Language */}
           <div
             onClick={() => setModalType('language')}
@@ -567,7 +589,7 @@ export function SettingsScreen({
               </div>
             </div>
             <div className="flex items-center gap-1 text-xs font-semibold text-slate-600">
-              <span>English</span>
+              <span>{currentLanguage === 'hi' ? 'हिंदी' : 'English'}</span>
               <svg className="w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <polyline points="9 18 15 12 9 6" />
               </svg>
@@ -624,7 +646,7 @@ export function SettingsScreen({
               </div>
             </div>
             <div className="flex items-center gap-1 text-xs font-semibold text-slate-600">
-              <span>System Default</span>
+              <span>{themeLabel}</span>
               <svg className="w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <polyline points="9 18 15 12 9 6" />
               </svg>
@@ -636,7 +658,7 @@ export function SettingsScreen({
       {/* Section 3: Data & Storage */}
       <div className="space-y-1.5">
         <h2 className="text-xs font-bold text-slate-900 px-1">Data & Storage</h2>
-        <div className="rounded-2xl bg-white border border-slate-200/80 divide-y divide-slate-100 shadow-2xs">
+        <div className="overflow-hidden rounded-2xl bg-white border border-slate-200/80 divide-y divide-slate-100 shadow-2xs">
           {/* Clear App Data */}
           <div
             onClick={handleClearCache}
@@ -708,7 +730,7 @@ export function SettingsScreen({
       {/* Section 4: About */}
       <div className="space-y-1.5">
         <h2 className="text-xs font-bold text-slate-900 px-1">About</h2>
-        <div className="rounded-2xl bg-white border border-slate-200/80 divide-y divide-slate-100 shadow-2xs">
+        <div className="overflow-hidden rounded-2xl bg-white border border-slate-200/80 divide-y divide-slate-100 shadow-2xs">
           {/* About CompliScan */}
           <div
             onClick={() => setModalType('about')}
@@ -762,7 +784,7 @@ export function SettingsScreen({
       {/* Section 5: Support */}
       <div className="space-y-1.5">
         <h2 className="text-xs font-bold text-slate-900 px-1">Support</h2>
-        <div className="rounded-2xl bg-white border border-slate-200/80 divide-y divide-slate-100 shadow-2xs">
+        <div className="overflow-hidden rounded-2xl bg-white border border-slate-200/80 divide-y divide-slate-100 shadow-2xs">
           {/* Help & Guidelines */}
           <div
             onClick={onOpenGuidelinesModal}
@@ -876,13 +898,32 @@ export function SettingsScreen({
                   )}
                 </div>
               )}
-              {modalType === 'about' && 'CompliScan v1.0.0 is an automated AI compliance validation system under the Legal Metrology (Packaged Commodities) Rules, 2011, Government of India.'}
+              {modalType === 'about' && 'CompliScan v1.0.0 is an automated AI compliance validation system under the Legal Metrology (Packaged Commodities) Rules, 2011, Lovely Professional University.'}
               {modalType === 'legal' && 'Governed under Section 36 of the Legal Metrology Act, 2009 and the Legal Metrology (Packaged Commodities) Rules, 2011.'}
               {modalType === 'offline' && 'CompliScan supports offline scanning with local SQLite cache and automatic background synchronization upon network reconnection.'}
-              {modalType === 'privacy' && 'All scanned images and extraction metadata are stored strictly in accordance with Government of India data retention and IT Act guidelines.'}
+              {modalType === 'privacy' && 'All scanned images and extraction metadata are stored strictly in accordance with Lovely Professional University data retention and IT Act guidelines.'}
               {modalType === 'support' && 'For technical assistance or reporting discrepancies, email support@legalmetrology.gov.in or call toll-free helpline 1800-11-4000.'}
-              {modalType === 'appearance' && 'Theme preference: System Default (Auto switches between Light and Dark based on OS preferences).'}
-              {modalType === 'language' && 'Available languages: English, Hindi, Marathi, Tamil, Gujarati. Change language using the top-right header selector.'}
+              {modalType === 'appearance' && (
+                <div className="space-y-2">
+                  <p>Choose how CompliScan looks on this device.</p>
+                  <div className="grid grid-cols-3 gap-2 pt-1">
+                    {(['light', 'dark', 'system'] as const).map((theme) => (
+                      <button key={theme} type="button" onClick={() => chooseTheme(theme)} className={`rounded-lg border px-2 py-2 text-xs font-semibold capitalize cursor-pointer ${themePreference === theme ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-blue-300'}`}>
+                        {theme === 'system' ? 'System' : theme}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {modalType === 'language' && (
+                <div className="space-y-2">
+                  <p>Select the language used for reports and supported interface content.</p>
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <button type="button" onClick={() => chooseLanguage('en')} className={`rounded-lg border px-3 py-2 text-xs font-semibold cursor-pointer ${currentLanguage === 'en' ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-blue-300'}`}>English</button>
+                    <button type="button" onClick={() => chooseLanguage('hi')} className={`rounded-lg border px-3 py-2 text-xs font-semibold cursor-pointer ${currentLanguage === 'hi' ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-blue-300'}`}>हिंदी (Hindi)</button>
+                  </div>
+                </div>
+              )}
             </div>
             <button
               type="button"

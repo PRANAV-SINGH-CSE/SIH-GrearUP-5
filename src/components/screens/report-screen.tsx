@@ -258,10 +258,10 @@ export function ReportScreen({
               {/* Status Box */}
               <div className={`mt-4 p-4 rounded-xl ${
                 scan.status === 'COMPLIANT'
-                  ? 'bg-emerald-50/80 border border-emerald-200/70 text-emerald-950'
+                  ? 'bg-emerald-50/80 dark:bg-emerald-950/60 border border-emerald-200/70 dark:border-emerald-800/70 text-emerald-950 dark:text-emerald-100'
                   : scan.status === 'NON_COMPLIANT'
-                  ? 'bg-red-50/80 border border-red-200/70 text-red-950'
-                  : 'bg-amber-50/80 border border-amber-200/70 text-amber-950'
+                  ? 'bg-red-50/80 dark:bg-red-950/60 border border-red-200/70 dark:border-red-800/70 text-red-950 dark:text-red-100'
+                  : 'bg-amber-50/80 dark:bg-amber-950/60 border border-amber-200/70 dark:border-amber-800/70 text-amber-950 dark:text-amber-100'
               }`}>
                 <div className="flex items-center gap-2 mb-1.5">
                   {scan.status === 'COMPLIANT' && (
@@ -271,7 +271,7 @@ export function ReportScreen({
                           <polyline points="20 6 9 17 4 12" />
                         </svg>
                       </div>
-                      <span className="text-sm font-bold text-emerald-800">Compliant</span>
+                      <span className="text-sm font-bold text-emerald-800 dark:text-emerald-300">Compliant</span>
                     </>
                   )}
                   {scan.status === 'NON_COMPLIANT' && (
@@ -282,7 +282,7 @@ export function ReportScreen({
                           <line x1="6" y1="6" x2="18" y2="18" />
                         </svg>
                       </div>
-                      <span className="text-sm font-bold text-red-800">Non-Compliant</span>
+                      <span className="text-sm font-bold text-red-800 dark:text-red-300">Non-Compliant</span>
                     </>
                   )}
                   {scan.status === 'NEEDS_REVIEW' && (
@@ -293,11 +293,11 @@ export function ReportScreen({
                           <circle cx="12" cy="17" r="0.75" fill="currentColor" />
                         </svg>
                       </div>
-                      <span className="text-sm font-bold text-amber-800">Needs Review</span>
+                      <span className="text-sm font-bold text-amber-800 dark:text-amber-300">Needs Review</span>
                     </>
                   )}
                 </div>
-                <p className="text-xs leading-relaxed text-slate-700">
+                <p className="text-xs leading-relaxed text-slate-700 dark:text-slate-200">
                   {scan.explanation}
                 </p>
               </div>
@@ -360,46 +360,46 @@ export function ReportScreen({
                     Compliance Summary
                   </h3>
                   <div className="grid grid-cols-4 gap-3">
-                    <div className="rounded-xl bg-[#EDF9F2] p-3 text-center flex flex-col items-center justify-center">
+                    <div className="rounded-xl bg-[#EDF9F2] dark:bg-emerald-950/50 dark:border dark:border-emerald-800/50 p-3 text-center flex flex-col items-center justify-center">
                       <div className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
                         <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                           <polyline points="20 6 9 17 4 12" />
                         </svg>
                       </div>
-                      <div className="text-xl font-black text-slate-900 mt-2">{scan.summary.passed}</div>
-                      <div className="text-xs font-semibold text-slate-600 mt-0.5">Passed</div>
+                      <div className="text-xl font-black text-slate-900 dark:text-emerald-100 mt-2">{scan.summary.passed}</div>
+                      <div className="text-xs font-semibold text-slate-600 dark:text-emerald-300 mt-0.5">Passed</div>
                     </div>
 
-                    <div className="rounded-xl bg-[#FEECEC] p-3 text-center flex flex-col items-center justify-center">
+                    <div className="rounded-xl bg-[#FEECEC] dark:bg-red-950/50 dark:border dark:border-red-800/50 p-3 text-center flex flex-col items-center justify-center">
                       <div className="w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center shrink-0">
-                        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                           <line x1="18" y1="6" x2="6" y2="18" />
                           <line x1="6" y1="6" x2="18" y2="18" />
                         </svg>
                       </div>
-                      <div className="text-xl font-black text-slate-900 mt-2">{scan.summary.failed}</div>
-                      <div className="text-xs font-semibold text-slate-600 mt-0.5">Failed</div>
+                      <div className="text-xl font-black text-slate-900 dark:text-red-100 mt-2">{scan.summary.failed}</div>
+                      <div className="text-xs font-semibold text-slate-600 dark:text-red-300 mt-0.5">Failed</div>
                     </div>
 
-                    <div className="rounded-xl bg-[#FEF6E5] p-3 text-center flex flex-col items-center justify-center">
+                    <div className="rounded-xl bg-[#FEF6E5] dark:bg-amber-950/50 dark:border dark:border-amber-800/50 p-3 text-center flex flex-col items-center justify-center">
                       <div className="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center shrink-0">
-                        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                           <line x1="12" y1="8" x2="12" y2="13" />
                           <circle cx="12" cy="17" r="0.75" fill="currentColor" />
                         </svg>
                       </div>
-                      <div className="text-xl font-black text-slate-900 mt-2">{scan.summary.warning}</div>
-                      <div className="text-xs font-semibold text-slate-600 mt-0.5">Needs Review</div>
+                      <div className="text-xl font-black text-slate-900 dark:text-amber-100 mt-2">{scan.summary.warning}</div>
+                      <div className="text-xs font-semibold text-slate-600 dark:text-amber-300 mt-0.5">Needs Review</div>
                     </div>
 
-                    <div className="rounded-xl bg-[#F1F5F9] p-3 text-center flex flex-col items-center justify-center">
+                    <div className="rounded-xl bg-[#F1F5F9] dark:bg-slate-800/60 dark:border dark:border-slate-700/50 p-3 text-center flex flex-col items-center justify-center">
                       <div className="w-6 h-6 rounded-full bg-slate-500 text-white flex items-center justify-center shrink-0">
-                        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                           <line x1="6" y1="12" x2="18" y2="12" />
                         </svg>
                       </div>
-                      <div className="text-xl font-black text-slate-900 mt-2">{scan.summary.notApplicable}</div>
-                      <div className="text-xs font-semibold text-slate-600 mt-0.5">Not Applicable</div>
+                      <div className="text-xl font-black text-slate-900 dark:text-slate-100 mt-2">{scan.summary.notApplicable}</div>
+                      <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mt-0.5">Not Applicable</div>
                     </div>
                   </div>
                 </div>
@@ -828,10 +828,10 @@ export function ReportScreen({
           {/* Right: Status Box */}
           <div className={`p-3.5 rounded-2xl max-w-sm shrink-0 ${
             scan.status === 'COMPLIANT'
-              ? 'bg-[#EDF9F2] text-emerald-950'
+              ? 'bg-[#EDF9F2] text-emerald-950 dark:bg-emerald-950/60 dark:text-emerald-100'
               : scan.status === 'NON_COMPLIANT'
-              ? 'bg-[#FEECEC] text-red-950'
-              : 'bg-[#FEF6E5] text-amber-950'
+              ? 'bg-[#FEECEC] text-red-950 dark:bg-red-950/60 dark:text-red-100'
+              : 'bg-[#FEF6E5] text-amber-950 dark:bg-amber-950/60 dark:text-amber-100'
           }`}>
             <div className="flex items-center gap-2 mb-1.5">
               {scan.status === 'COMPLIANT' && (
@@ -841,7 +841,7 @@ export function ReportScreen({
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
                   </div>
-                  <span className="text-sm sm:text-base font-bold text-emerald-800">Compliant</span>
+                  <span className="text-sm sm:text-base font-bold text-emerald-800 dark:text-emerald-300">Compliant</span>
                 </>
               )}
               {scan.status === 'NON_COMPLIANT' && (
@@ -852,7 +852,7 @@ export function ReportScreen({
                       <line x1="6" y1="6" x2="18" y2="18" />
                     </svg>
                   </div>
-                  <span className="text-sm sm:text-base font-bold text-red-800">Non-Compliant</span>
+                  <span className="text-sm sm:text-base font-bold text-red-800 dark:text-red-300">Non-Compliant</span>
                 </>
               )}
               {scan.status === 'NEEDS_REVIEW' && (
@@ -863,11 +863,11 @@ export function ReportScreen({
                       <circle cx="12" cy="17" r="0.75" fill="currentColor" />
                     </svg>
                   </div>
-                  <span className="text-sm sm:text-base font-bold text-amber-800">Needs Review</span>
+                  <span className="text-sm sm:text-base font-bold text-amber-800 dark:text-amber-300">Needs Review</span>
                 </>
               )}
             </div>
-            <p className="text-xs leading-relaxed text-slate-600">
+            <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-200">
               {scan.explanation}
             </p>
           </div>
@@ -920,63 +920,63 @@ export function ReportScreen({
             </h3>
             <div className="grid grid-cols-4 gap-2 sm:gap-3">
               {/* Passed Card */}
-              <div className="rounded-2xl bg-[#EDF9F2] py-2.5 px-1.5 sm:py-3 sm:px-2 text-center flex flex-col items-center justify-center transition-transform hover:scale-[1.02]">
+              <div className="rounded-2xl bg-[#EDF9F2] dark:bg-emerald-950/50 dark:border dark:border-emerald-800/40 py-2.5 px-1.5 sm:py-3 sm:px-2 text-center flex flex-col items-center justify-center transition-transform hover:scale-[1.02]">
                 <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
                   <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
                 </div>
-                <div className="text-base sm:text-lg font-bold text-slate-900 mt-1 sm:mt-1.5 leading-none">
+                <div className="text-base sm:text-lg font-bold text-slate-900 dark:text-emerald-100 mt-1 sm:mt-1.5 leading-none">
                   {scan.summary.passed}
                 </div>
-                <div className="text-[10px] sm:text-xs font-medium text-slate-600 mt-1 leading-tight text-center">
+                <div className="text-[10px] sm:text-xs font-medium text-slate-600 dark:text-emerald-300 mt-1 leading-tight text-center">
                   Passed
                 </div>
               </div>
 
               {/* Failed Card */}
-              <div className="rounded-2xl bg-[#FEECEC] py-2.5 px-1.5 sm:py-3 sm:px-2 text-center flex flex-col items-center justify-center transition-transform hover:scale-[1.02]">
+              <div className="rounded-2xl bg-[#FEECEC] dark:bg-red-950/50 dark:border dark:border-red-800/40 py-2.5 px-1.5 sm:py-3 sm:px-2 text-center flex flex-col items-center justify-center transition-transform hover:scale-[1.02]">
                 <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-red-600 text-white flex items-center justify-center shrink-0">
                   <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18" />
                     <line x1="6" y1="6" x2="18" y2="18" />
                   </svg>
                 </div>
-                <div className="text-base sm:text-lg font-bold text-slate-900 mt-1 sm:mt-1.5 leading-none">
+                <div className="text-base sm:text-lg font-bold text-slate-900 dark:text-red-100 mt-1 sm:mt-1.5 leading-none">
                   {scan.summary.failed}
                 </div>
-                <div className="text-[10px] sm:text-xs font-medium text-slate-600 mt-1 leading-tight text-center">
+                <div className="text-[10px] sm:text-xs font-medium text-slate-600 dark:text-red-300 mt-1 leading-tight text-center">
                   Failed
                 </div>
               </div>
 
               {/* Warning Card */}
-              <div className="rounded-2xl bg-[#FEF6E5] py-2.5 px-1.5 sm:py-3 sm:px-2 text-center flex flex-col items-center justify-center transition-transform hover:scale-[1.02]">
+              <div className="rounded-2xl bg-[#FEF6E5] dark:bg-amber-950/50 dark:border dark:border-amber-800/40 py-2.5 px-1.5 sm:py-3 sm:px-2 text-center flex flex-col items-center justify-center transition-transform hover:scale-[1.02]">
                 <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-amber-500 text-white flex items-center justify-center shrink-0">
                   <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="12" y1="8" x2="12" y2="13" />
                     <circle cx="12" cy="17" r="0.75" fill="currentColor" />
                   </svg>
                 </div>
-                <div className="text-base sm:text-lg font-bold text-slate-900 mt-1 sm:mt-1.5 leading-none">
+                <div className="text-base sm:text-lg font-bold text-slate-900 dark:text-amber-100 mt-1 sm:mt-1.5 leading-none">
                   {scan.summary.warning}
                 </div>
-                <div className="text-[10px] sm:text-xs font-medium text-slate-600 mt-1 leading-tight text-center">
+                <div className="text-[10px] sm:text-xs font-medium text-slate-600 dark:text-amber-300 mt-1 leading-tight text-center">
                   Warning
                 </div>
               </div>
 
               {/* Not Applicable Card */}
-              <div className="rounded-2xl bg-[#F1F5F9] py-2.5 px-1.5 sm:py-3 sm:px-2 text-center flex flex-col items-center justify-center transition-transform hover:scale-[1.02]">
+              <div className="rounded-2xl bg-[#F1F5F9] dark:bg-slate-800/60 dark:border dark:border-slate-700/40 py-2.5 px-1.5 sm:py-3 sm:px-2 text-center flex flex-col items-center justify-center transition-transform hover:scale-[1.02]">
                 <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-slate-500 text-white flex items-center justify-center shrink-0">
                   <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="6" y1="12" x2="18" y2="12" />
                   </svg>
                 </div>
-                <div className="text-base sm:text-lg font-bold text-slate-900 mt-1 sm:mt-1.5 leading-none">
+                <div className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 mt-1 sm:mt-1.5 leading-none">
                   {scan.summary.notApplicable}
                 </div>
-                <div className="text-[10px] sm:text-xs font-medium text-slate-600 mt-1 leading-tight text-center">
+                <div className="text-[10px] sm:text-xs font-medium text-slate-600 dark:text-slate-300 mt-1 leading-tight text-center">
                   Not Applicable
                 </div>
               </div>

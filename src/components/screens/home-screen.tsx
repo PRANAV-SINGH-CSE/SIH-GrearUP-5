@@ -9,26 +9,18 @@ export interface HomeScreenProps {
   onImageFileSelected: (file: File) => void;
   onNavigateTab: (tab: NavTabId) => void;
   onOpenGuidelinesModal: () => void;
-  onQuickPresetSelect: (presetId: string) => void;
+  onShowLoadingModal?: () => void;
   isProcessing: boolean;
   isVerifiedUser: boolean;
   onRequireAuth: (message: string) => void;
 }
-
-const PRESET_OPTIONS = [
-  { id: 'COMPLIANT_COMMODITY', label: 'Basmati Rice (Fully Compliant)' },
-  { id: 'MISSING_MRP', label: 'Roasted Almonds (Missing MRP)' },
-  { id: 'MISSING_NET_QUANTITY', label: 'Sunflower Oil (Missing Net Qty)' },
-  { id: 'INVALID_UNIT_SYMBOL', label: 'Turmeric Powder (Invalid Unit "gms")' },
-  { id: 'FOOD_PRODUCT_WITH_EXPIRY', label: 'Toned Milk (With Expiry Date)' },
-];
 
 export function HomeScreen({
   onOpenScanningCamera,
   onImageFileSelected,
   onNavigateTab,
   onOpenGuidelinesModal,
-  onQuickPresetSelect,
+  onShowLoadingModal,
   isProcessing,
   isVerifiedUser,
   onRequireAuth,
@@ -140,12 +132,21 @@ export function HomeScreen({
 
             {/* Processing Indicator */}
             {isProcessing && (
-              <div className="mt-5 inline-flex items-center gap-2.5 px-4 py-2 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold animate-pulse">
-                <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
-                <span>Processing label perception with Gemini Flash Lite & LMPC compliance verification...</span>
+              <div
+                onClick={onShowLoadingModal}
+                className="mt-5 inline-flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 text-blue-800 text-xs font-bold shadow-xs cursor-pointer hover:border-blue-400 transition-all group"
+              >
+                <div className="relative w-4 h-4 flex items-center justify-center">
+                  <span className="absolute inset-0 rounded-full border border-blue-500/30 animate-ping" />
+                  <svg className="animate-spin w-4 h-4 text-blue-600" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                </div>
+                <span>AI Compliance Audit in progress...</span>
+                <span className="text-[10px] text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full font-bold group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                  View Pipeline &rarr;
+                </span>
               </div>
             )}
           </div>
@@ -226,26 +227,6 @@ export function HomeScreen({
           </div>
         </section>
 
-        {/* Quick Simulation Presets Toolbar */}
-        <div className="px-5 py-3 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between text-xs shadow-2xs">
-          <div className="flex items-center gap-2 font-semibold text-slate-700">
-            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-            <span>Simulate Scan Scenarios (Instant Evaluation):</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <select
-              onChange={(e) => e.target.value && onQuickPresetSelect(e.target.value)}
-              defaultValue=""
-              className="bg-white border border-slate-300 text-slate-800 rounded-xl px-3 py-1.5 text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-hidden min-w-[280px]"
-            >
-              <option value="" disabled>Choose test commodity scenario...</option>
-              {PRESET_OPTIONS.map((opt) => (
-                <option key={opt.id} value={opt.id}>{opt.label}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
         {/* Monuments Skyline & Slogan Footer */}
         <footer className="pt-4 flex flex-col items-center text-center">
           <IndianMonumentsSkyline className="w-full max-w-4xl h-24 mb-4" />
@@ -266,7 +247,7 @@ export function HomeScreen({
       {/* ========================================================================= */}
       {/* 2. MOBILE VIEW (Visible on screens < 1024px)                               */}
       {/* ========================================================================= */}
-      <div className="lg:hidden flex flex-col gap-5 pb-24 animate-in fade-in duration-150">
+      <div className="lg:hidden flex flex-col gap-5 animate-in fade-in duration-150">
         {/* Mobile Hero Section */}
         <div className="pt-4 sm:pt-3 px-1 flex items-start justify-between">
           <div className="flex-1 pr-2">
@@ -353,12 +334,20 @@ export function HomeScreen({
 
           {/* Processing Indicator */}
           {isProcessing && (
-            <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold animate-pulse">
-              <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-              </svg>
-              Analyzing image with AI compliance engine...
+            <div
+              onClick={onShowLoadingModal}
+              className="mt-4 inline-flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 text-blue-800 text-xs font-bold shadow-xs cursor-pointer active:scale-95 transition-all"
+            >
+              <div className="relative w-3.5 h-3.5 flex items-center justify-center">
+                <svg className="animate-spin w-3.5 h-3.5 text-blue-600" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+              </div>
+              <span>AI scanning label...</span>
+              <span className="text-[10px] text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-md font-bold">
+                View &rarr;
+              </span>
             </div>
           )}
         </div>
@@ -462,21 +451,6 @@ export function HomeScreen({
               </div>
             </div>
           </button>
-        </div>
-
-        {/* Quick Test Scenarios Bar */}
-        <div className="px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200/70 flex items-center justify-between gap-2 text-xs">
-          <span className="font-semibold text-slate-700 shrink-0">Sample Preset:</span>
-          <select
-            onChange={(e) => e.target.value && onQuickPresetSelect(e.target.value)}
-            defaultValue=""
-            className="bg-white border border-slate-300 text-slate-800 rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-hidden w-full max-w-xs"
-          >
-            <option value="" disabled>Select test scenario to simulate...</option>
-            {PRESET_OPTIONS.map((opt) => (
-              <option key={opt.id} value={opt.id}>{opt.label}</option>
-            ))}
-          </select>
         </div>
 
         {/* Bottom Banner Card */}

@@ -52,7 +52,7 @@ export function DesktopHeader({
               Department of Legal Metrology
             </div>
             <div className="text-[11px] font-medium text-slate-500">
-              Government of India
+              Lovely Professional University
             </div>
           </div>
         </div>

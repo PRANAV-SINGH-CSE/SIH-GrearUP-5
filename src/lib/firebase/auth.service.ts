@@ -13,8 +13,11 @@ import {
   signOut,
   updateProfile,
   onAuthStateChanged,
+  browserLocalPersistence,
+  setPersistence,
 } from 'firebase/auth';
 import { firebaseConfig } from './firebase.service';
+import { AuthCacheService } from '@/lib/auth/auth-cache.service';
 
 function getClientFirebaseApp(): FirebaseApp {
   if (getApps().length > 0) {
@@ -34,6 +37,9 @@ export function getFirebaseAuth(): Auth {
   if (!authInstance) {
     const app = getClientFirebaseApp();
     authInstance = getAuth(app);
+    setPersistence(authInstance, browserLocalPersistence).catch((err) => {
+      console.warn('Firebase setPersistence error:', err);
+    });
   }
   return authInstance;
 }
@@ -58,6 +64,7 @@ export class FirebaseAuthService {
       prompt: 'select_account',
     });
     const cred = await signInWithPopup(auth, provider);
+    AuthCacheService.saveUser(cred.user);
     return cred.user;
   }
 
@@ -75,6 +82,7 @@ export class FirebaseAuthService {
       await updateProfile(cred.user, { displayName });
     }
     await sendEmailVerification(cred.user);
+    AuthCacheService.saveUser(cred.user);
     return cred.user;
   }
 
@@ -84,6 +92,7 @@ export class FirebaseAuthService {
   static async signInWithEmail(email: string, pass: string): Promise<User> {
     const auth = getFirebaseAuth();
     const cred = await signInWithEmailAndPassword(auth, email, pass);
+    AuthCacheService.saveUser(cred.user);
     return cred.user;
   }
 
@@ -100,13 +109,16 @@ export class FirebaseAuthService {
   static async reloadUser(user: User): Promise<User> {
     await user.reload();
     const auth = getFirebaseAuth();
-    return auth.currentUser || user;
+    const updated = auth.currentUser || user;
+    AuthCacheService.saveUser(updated);
+    return updated;
   }
 
   /**
    * Sign Out
    */
   static async signOut(): Promise<void> {
+    AuthCacheService.clear();
     const auth = getFirebaseAuth();
     await signOut(auth);
   }
@@ -116,6 +128,11 @@ export class FirebaseAuthService {
    */
   static onAuthStateChange(callback: (user: User | null) => void): () => void {
     const auth = getFirebaseAuth();
-    return onAuthStateChanged(auth, callback);
+    return onAuthStateChanged(auth, (user) => {
+      if (user) {
+        AuthCacheService.saveUser(user);
+      }
+      callback(user);
+    });
   }
 }

@@ -12,12 +12,15 @@ import { SettingsScreen } from '@/components/screens/settings-screen';
 import { CameraModal } from '@/components/camera-modal';
 import { GuidelinesModal } from '@/components/guidelines-modal';
 import { AuthModal } from '@/components/auth-modal';
+import { ScanLoadingModal } from '@/components/scan-loading-modal';
 import { FirebaseAuthService } from '@/lib/firebase/auth.service';
 import { FirebaseService } from '@/lib/firebase/firebase.service';
+import { AuthCacheService } from '@/lib/auth/auth-cache.service';
 import { AppScanItem, RuleCheckItem } from '@/lib/mock-scans';
 import { compressImageForUpload } from '@/lib/utils/client-image';
 
 type Language = 'en' | 'hi' | 'mr' | 'ta' | 'gu';
+type ThemePreference = 'light' | 'dark' | 'system';
 
 interface ApiScanResponse {
   success: boolean;
@@ -85,26 +88,50 @@ export default function Home() {
   const [scans, setScans] = useState<AppScanItem[]>([]);
   const [selectedScan, setSelectedScan] = useState<AppScanItem | null>(null);
   const [currentLanguage, setCurrentLanguage] = useState<Language>('en');
+  const [themePreference, setThemePreference] = useState<ThemePreference>('system');
+  const [systemPrefersDark, setSystemPrefersDark] = useState(false);
   const [isGuidelinesOpen, setIsGuidelinesOpen] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isScanMinimized, setIsScanMinimized] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Authentication State
+  // Authentication State with instant mobile cache hydration
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authRequiredMessage, setAuthRequiredMessage] = useState<string | undefined>(undefined);
 
   const isVerifiedUser = Boolean(currentUser);
 
-  // Fetch user scans from Firestore user-wise
+  // Rehydrate cached user session and cached scans immediately on client mount
+  useEffect(() => {
+    const cachedUser = AuthCacheService.getCachedUser();
+    if (cachedUser) {
+      setCurrentUser(cachedUser);
+      const cachedScans = AuthCacheService.getCachedScans(cachedUser.uid);
+      if (cachedScans.length > 0) {
+        setScans(cachedScans);
+        setSelectedScan(cachedScans[0]);
+      }
+    }
+  }, []);
+
+  // Fetch user scans from Firestore user-wise (with local cache fallback)
   const fetchUserScans = async (userId: string) => {
+    // 1. First show cached scans instantly so mobile user sees zero latency
+    const localScans = AuthCacheService.getCachedScans(userId);
+    if (localScans.length > 0) {
+      setScans(localScans);
+      setSelectedScan((curr) => curr || localScans[0]);
+    }
+
     try {
       const userScans = await FirebaseService.listUserScans(userId);
       if (Array.isArray(userScans) && userScans.length > 0) {
         setScans(userScans);
-        setSelectedScan(userScans[0]);
-      } else {
+        setSelectedScan((curr) => curr || userScans[0]);
+        AuthCacheService.saveScans(userId, userScans);
+      } else if (localScans.length === 0) {
         setScans([]);
         setSelectedScan(null);
       }
@@ -115,51 +142,66 @@ export default function Home() {
         const json = await res.json();
         if (json.success && Array.isArray(json.data) && json.data.length > 0) {
           setScans(json.data);
-          setSelectedScan(json.data[0]);
-        } else {
-          setScans([]);
-          setSelectedScan(null);
+          setSelectedScan((curr) => curr || json.data[0]);
+          AuthCacheService.saveScans(userId, json.data);
         }
       } catch (apiErr) {
         console.warn('API user scans fetch error:', apiErr);
-        setScans([]);
-        setSelectedScan(null);
       }
     }
   };
 
-  // Dismiss instant splash preloader as soon as React mounts
+  // Keep interface preferences available between visits without requiring an account.
   useEffect(() => {
-    const preloader = document.getElementById('compliscan-preloader');
-    if (preloader) {
-      preloader.style.opacity = '0';
-      preloader.style.pointerEvents = 'none';
-      const timer = setTimeout(() => {
-        preloader.remove();
-      }, 380);
-      return () => clearTimeout(timer);
-    }
+    const savedLanguage = window.localStorage.getItem('compliscan-language');
+    const savedTheme = window.localStorage.getItem('compliscan-theme');
+    if (savedLanguage === 'en' || savedLanguage === 'hi') setCurrentLanguage(savedLanguage);
+    if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'system') setThemePreference(savedTheme);
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const updateSystemTheme = () => setSystemPrefersDark(mediaQuery.matches);
+    updateSystemTheme();
+    mediaQuery.addEventListener('change', updateSystemTheme);
+    return () => mediaQuery.removeEventListener('change', updateSystemTheme);
   }, []);
 
-  // Subscribe to Firebase Auth changes
+  useEffect(() => {
+    window.localStorage.setItem('compliscan-language', currentLanguage);
+  }, [currentLanguage]);
+
+  useEffect(() => {
+    window.localStorage.setItem('compliscan-theme', themePreference);
+  }, [themePreference]);
+
+  // Subscribe to Firebase Auth changes with mobile cache safety
   useEffect(() => {
     const unsubscribe = FirebaseAuthService.onAuthStateChange(async (user) => {
-      setCurrentUser(user);
       if (user) {
-        // Authenticated: load this specific user's scans from Firestore
+        setCurrentUser(user);
+        AuthCacheService.saveUser(user);
         await fetchUserScans(user.uid);
       } else {
-        // Logged out: immediately clear scans & reports, and redirect to home screen
-        setScans([]);
-        setSelectedScan(null);
-        setActiveTab((prev) => (prev === 'history' || prev === 'reports' ? 'home' : prev));
+        // If user explicitly signed out or no cached profile exists, clear session
+        if (AuthCacheService.isExplicitlyLoggedOut() || !AuthCacheService.getCachedUser()) {
+          setCurrentUser(null);
+          setScans([]);
+          setSelectedScan(null);
+          setActiveTab((prev) => (prev === 'history' || prev === 'reports' ? 'home' : prev));
+        } else {
+          // Keep cached user active during mobile app cold-starts or network reconnects
+          const cachedUser = AuthCacheService.getCachedUser();
+          if (cachedUser) {
+            setCurrentUser(cachedUser);
+          }
+        }
       }
     });
     return () => unsubscribe();
   }, []);
 
-  // Centralized sign-out: clear state and show Home screen immediately
+  // Centralized sign-out: clear cache, sign out of Firebase, and reset UI state
   const handleSignOut = async () => {
+    AuthCacheService.clear();
     try {
       await FirebaseAuthService.signOut();
     } catch (err) {
@@ -190,6 +232,7 @@ export default function Home() {
   // Handle image capture from live camera or file input
   const handleProcessScanFile = async (rawFile: File) => {
     setIsProcessing(true);
+    setIsScanMinimized(false);
     setErrorMessage(null);
 
     try {
@@ -366,9 +409,16 @@ export default function Home() {
         }
       }
 
-      setScans((prev) => [newScanItem, ...prev]);
+      setScans((prev) => {
+        const next = [newScanItem, ...prev];
+        if (currentUser?.uid) {
+          AuthCacheService.saveScans(currentUser.uid, next);
+        }
+        return next;
+      });
       setSelectedScan(newScanItem);
-      handleTabChange('reports');
+      setActiveTab('reports');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: unknown) {
       console.error('Scan failed:', err);
       setErrorMessage(err instanceof Error ? err.message : 'An error occurred during verification');
@@ -377,24 +427,10 @@ export default function Home() {
     }
   };
 
-  // Preset selector
-  const handleQuickPresetSelect = async (presetId: string) => {
-    setIsProcessing(true);
-    try {
-      const syntheticBlob = new Blob([`[SYNTHETIC_TEST_DATASET:${presetId}]`], {
-        type: 'image/jpeg',
-      });
-      const file = new File([syntheticBlob], `${presetId}.jpg`, { type: 'image/jpeg' });
-      await handleProcessScanFile(file);
-    } catch (err: unknown) {
-      console.warn('Preset execution failed:', err);
-      setIsProcessing(false);
-    }
-  };
-
   // Clear App Data for current user
   const handleClearData = async () => {
     if (currentUser?.uid) {
+      AuthCacheService.clearUserScans(currentUser.uid);
       try {
         await FirebaseService.clearUserScans(currentUser.uid);
         await fetch(`/api/firebase-scans?userId=${currentUser.uid}`, { method: 'DELETE' });
@@ -406,8 +442,12 @@ export default function Home() {
     setSelectedScan(null);
   };
 
+  const resolvedTheme = themePreference === 'system'
+    ? (systemPrefersDark ? 'dark' : 'light')
+    : themePreference;
+
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 selection:bg-blue-500 selection:text-white">
+    <div data-theme={resolvedTheme} className="min-h-screen bg-slate-100 text-slate-900 selection:bg-blue-500 selection:text-white">
       {/* ========================================================================= */}
       {/* MOBILE-FIRST SHELL (Visible ONLY on viewports < lg)                       */}
       {/* ========================================================================= */}
@@ -458,7 +498,7 @@ export default function Home() {
                 onImageFileSelected={handleProcessScanFile}
                 onNavigateTab={handleTabChange}
                 onOpenGuidelinesModal={() => setIsGuidelinesOpen(true)}
-                onQuickPresetSelect={handleQuickPresetSelect}
+                onShowLoadingModal={() => setIsScanMinimized(false)}
                 isProcessing={isProcessing}
                 isVerifiedUser={isVerifiedUser}
                 onRequireAuth={handleRequireAuth}
@@ -494,6 +534,10 @@ export default function Home() {
             {activeTab === 'settings' && (
               <SettingsScreen
                 currentUser={currentUser}
+                currentLanguage={currentLanguage}
+                onLanguageChange={setCurrentLanguage}
+                themePreference={themePreference}
+                onThemeChange={setThemePreference}
                 onOpenAuthModal={() => {
                   setAuthRequiredMessage(undefined);
                   setIsAuthModalOpen(true);
@@ -535,7 +579,7 @@ export default function Home() {
               onImageFileSelected={handleProcessScanFile}
               onNavigateTab={handleTabChange}
               onOpenGuidelinesModal={() => setIsGuidelinesOpen(true)}
-              onQuickPresetSelect={handleQuickPresetSelect}
+              onShowLoadingModal={() => setIsScanMinimized(false)}
               isProcessing={isProcessing}
               isVerifiedUser={isVerifiedUser}
               onRequireAuth={handleRequireAuth}
@@ -586,6 +630,10 @@ export default function Home() {
             {activeTab === 'settings' && (
               <SettingsScreen
                 currentUser={currentUser}
+                currentLanguage={currentLanguage}
+                onLanguageChange={setCurrentLanguage}
+                themePreference={themePreference}
+                onThemeChange={setThemePreference}
                 onOpenAuthModal={() => {
                   setAuthRequiredMessage(undefined);
                   setIsAuthModalOpen(true);
@@ -619,6 +667,13 @@ export default function Home() {
         currentUser={currentUser}
         onUserChange={(user) => setCurrentUser(user)}
         requiredActionMessage={authRequiredMessage}
+      />
+
+      {/* Global Animated AI Scan Loading Overlay / Floating Pill */}
+      <ScanLoadingModal
+        isOpen={isProcessing}
+        isMinimized={isScanMinimized}
+        onMinimize={() => setIsScanMinimized((prev) => !prev)}
       />
     </div>
   );

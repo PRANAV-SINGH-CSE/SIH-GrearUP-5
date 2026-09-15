@@ -168,7 +168,7 @@ export function AuthModal({
             Verified User Authentication
           </h2>
           <p className="text-xs text-slate-500 font-medium mt-0.5">
-            Department of Legal Metrology • Government of India
+            Department of Legal Metrology • Lovely Professional University
           </p>
 
           {requiredActionMessage && (

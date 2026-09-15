@@ -24,3 +24,118 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@keyframes compliscan-preloader-dismiss {
+  0%, 65% { opacity: 1; visibility: visible; }
+  100% { opacity: 0; visibility: hidden; pointer-events: none; }
+}
+
+/* A controlled dark palette for the application shell. Component utilities remain
+   readable without requiring a separate duplicate of every screen. */
+[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+[data-theme="dark"] [class*="bg-white"] { background-color: #111827 !important; }
+[data-theme="dark"] [class*="bg-"][class*="-50"] { background-color: #172033 !important; }
+[data-theme="dark"] [class*="bg-"][class*="-100"] { background-color: #1e293b !important; }
+[data-theme="dark"] [class*="bg-slate-50"] { background-color: #172033 !important; }
+[data-theme="dark"] [class*="bg-slate-100"] { background-color: #1e293b !important; }
+[data-theme="dark"] [class*="bg-gradient"] { background-image: none !important; }
+[data-theme="dark"] [class*="shadow"] { box-shadow: none !important; }
+[data-theme="dark"] [class*="border-slate"] { border-color: #334155 !important; }
+[data-theme="dark"] [class*="border-"][class*="-100"],
+[data-theme="dark"] [class*="border-"][class*="-200"] { border-color: #334155 !important; }
+[data-theme="dark"] [class*="divide-slate"] > :not([hidden]) ~ :not([hidden]) { border-color: #334155 !important; }
+[data-theme="dark"] [class*="text-slate-900"],
+[data-theme="dark"] [class*="text-slate-800"] { color: #f8fafc !important; }
+[data-theme="dark"] [class*="text-slate-700"],
+[data-theme="dark"] [class*="text-slate-600"] { color: #cbd5e1 !important; }
+[data-theme="dark"] [class*="text-slate-500"],
+[data-theme="dark"] [class*="text-slate-400"] { color: #94a3b8 !important; }
+[data-theme="dark"] [class*="bg-blue-50"] { background-color: #172554 !important; }
+[data-theme="dark"] [class*="bg-emerald-50"] { background-color: #052e2b !important; }
+[data-theme="dark"] [class*="hover:bg-slate-50"]:hover { background-color: #26334a !important; }
+
+/* Custom status card backgrounds in Dark Mode */
+[data-theme="dark"] [class*="bg-[#EDF9F2]"] {
+  background-color: #064e3b !important;
+  border: 1px solid #047857 !important;
+}
+[data-theme="dark"] [class*="bg-[#FEECEC]"] {
+  background-color: #450a0a !important;
+  border: 1px solid #991b1b !important;
+}
+[data-theme="dark"] [class*="bg-[#FEF6E5]"] {
+  background-color: #451a03 !important;
+  border: 1px solid #b45309 !important;
+}
+[data-theme="dark"] [class*="bg-[#F1F5F9]"] {
+  background-color: #1e293b !important;
+  border: 1px solid #334155 !important;
+}
+
+/* Ensure text inside status cards and badges is clear & high-contrast in Dark Mode */
+[data-theme="dark"] [class*="bg-[#EDF9F2]"] div,
+[data-theme="dark"] [class*="bg-[#EDF9F2]"] span,
+[data-theme="dark"] [class*="bg-[#EDF9F2]"] p {
+  color: #a7f3d0 !important;
+}
+[data-theme="dark"] [class*="bg-[#EDF9F2]"] .text-slate-900 {
+  color: #ecfdf5 !important;
+}
+
+[data-theme="dark"] [class*="bg-[#FEECEC]"] div,
+[data-theme="dark"] [class*="bg-[#FEECEC]"] span,
+[data-theme="dark"] [class*="bg-[#FEECEC]"] p {
+  color: #fecaca !important;
+}
+[data-theme="dark"] [class*="bg-[#FEECEC]"] .text-slate-900 {
+  color: #fef2f2 !important;
+}
+
+[data-theme="dark"] [class*="bg-[#FEF6E5]"] div,
+[data-theme="dark"] [class*="bg-[#FEF6E5]"] span,
+[data-theme="dark"] [class*="bg-[#FEF6E5]"] p {
+  color: #fde68a !important;
+}
+[data-theme="dark"] [class*="bg-[#FEF6E5]"] .text-slate-900 {
+  color: #fffbeb !important;
+}
+
+[data-theme="dark"] [class*="bg-[#F1F5F9]"] div,
+[data-theme="dark"] [class*="bg-[#F1F5F9]"] span,
+[data-theme="dark"] [class*="bg-[#F1F5F9]"] p {
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] [class*="bg-[#F1F5F9]"] .text-slate-900 {
+  color: #f8fafc !important;
+}
+
+/* Status header labels in dark mode */
+[data-theme="dark"] [class*="text-emerald-800"],
+[data-theme="dark"] [class*="text-emerald-950"] {
+  color: #6ee7b7 !important;
+}
+[data-theme="dark"] [class*="text-red-800"],
+[data-theme="dark"] [class*="text-red-950"] {
+  color: #fca5a5 !important;
+}
+[data-theme="dark"] [class*="text-amber-800"],
+[data-theme="dark"] [class*="text-amber-950"] {
+  color: #fcd34d !important;
+}
+
+/* Blue text hierarchy in dark mode (fixes black text on dark background in modals) */
+[data-theme="dark"] [class*="text-blue-950"] { color: #bfdbfe !important; }
+[data-theme="dark"] [class*="text-blue-900"] { color: #93c5fd !important; }
+[data-theme="dark"] [class*="text-blue-800"] { color: #60a5fa !important; }
+[data-theme="dark"] [class*="text-blue-700"] { color: #38bdf8 !important; }
+
+[data-theme="dark"] .hero-illustration-aura {
+  background-color: #1d4ed8 !important;
+  opacity: 0.16;
+}
+[data-theme="dark"] .home-hero-illustration svg {
+  filter: brightness(0.72) saturate(0.85);
+}

@@ -12,7 +12,7 @@ async function main() {
       version: 'LMPC-2011.v2026',
       name: 'Legal Metrology (Packaged Commodities) Rules, 2011 (as amended up to 2023)',
       description: 'Standard packaged commodities ruleset under the Legal Metrology Act, 2009',
-      legalSource: 'Ministry of Consumer Affairs, Food and Public Distribution, Government of India',
+      legalSource: 'Ministry of Consumer Affairs, Food and Public Distribution, Lovely Professional University',
       isActive: true,
     },
     update: {

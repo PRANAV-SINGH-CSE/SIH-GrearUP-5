@@ -11,9 +11,6 @@ export interface AppHeaderProps {
 const LANGUAGES = [
   { code: 'en', label: 'English', nativeLabel: 'English' },
   { code: 'hi', label: 'Hindi', nativeLabel: 'हिंदी' },
-  { code: 'mr', label: 'Marathi', nativeLabel: 'मराठी' },
-  { code: 'ta', label: 'Tamil', nativeLabel: 'தமிழ்' },
-  { code: 'gu', label: 'Gujarati', nativeLabel: 'ગુજરાતી' },
 ] as const;
 
 export function AppHeader({ currentLanguage, onLanguageChange }: AppHeaderProps) {
@@ -42,7 +39,7 @@ export function AppHeader({ currentLanguage, onLanguageChange }: AppHeaderProps)
             Department of Legal Metrology
           </span>
           <span className="text-xs text-slate-500 font-medium">
-            Government of India
+            Lovely Professional University
           </span>
         </div>
       </div>

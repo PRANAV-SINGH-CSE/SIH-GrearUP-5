@@ -80,9 +80,9 @@ export function NationalEmblem({ className = 'w-10 h-12' }: { className?: string
  */
 export function HeroIllustration({ className = 'w-48 h-40' }: { className?: string }) {
   return (
-    <div className={`relative shrink-0 flex items-center justify-center ${className}`}>
+    <div className={`home-hero-illustration relative shrink-0 flex items-center justify-center ${className}`}>
       {/* Soft circular aura background */}
-      <div className="absolute -right-4 -top-2 w-44 h-44 rounded-full bg-blue-100/60 blur-xl pointer-events-none" />
+      <div className="hero-illustration-aura absolute -right-4 -top-2 w-44 h-44 rounded-full bg-blue-100/60 blur-xl pointer-events-none" />
       
       <svg
         viewBox="0 0 240 200"
@@ -976,4 +976,3 @@ export function DetectedTextBackOfPackGraphic({ className = 'w-full' }: { classN
     </div>
   );
 }
-
