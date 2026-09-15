@@ -336,8 +336,8 @@ export default function Home() {
         apiReport.overallStatus === 'COMPLIANT'
           ? 'COMPLIANT'
           : apiReport.overallStatus === 'NON_COMPLIANT'
-          ? 'NON_COMPLIANT'
-          : 'NEEDS_REVIEW';
+            ? 'NON_COMPLIANT'
+            : 'NEEDS_REVIEW';
 
       const detectedName =
         apiReport.productInformation?.productName ||
@@ -483,8 +483,8 @@ export default function Home() {
       {/* ========================================================================= */}
       {/* MOBILE-FIRST SHELL (Visible ONLY on viewports < lg)                       */}
       {/* ========================================================================= */}
-      <div className="lg:hidden flex justify-center overscroll-none">
-        <div className="w-full max-w-lg min-h-screen bg-white shadow-xl flex flex-col relative border-x border-slate-200/80 overscroll-none">
+      <div className="lg:hidden flex justify-center">
+        <div className="w-full max-w-lg min-h-screen bg-white shadow-xl flex flex-col relative border-x border-slate-200/80">
           {/* Sticky App Header */}
           <AppHeader
             currentLanguage={currentLanguage}
@@ -523,7 +523,7 @@ export default function Home() {
           )}
 
           {/* Main Content Viewport */}
-          <main className="flex-1 px-4 pt-6 pb-36 sm:pb-40 overscroll-none">
+          <main className="flex-1 px-4 pt-6 pb-36 sm:pb-40 overflow-y-auto">
             <div key={activeTab} className="animate-page-shift min-h-full">
               {activeTab === 'home' && (
                 <HomeScreen
