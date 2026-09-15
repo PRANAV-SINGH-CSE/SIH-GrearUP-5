@@ -113,26 +113,30 @@ export function ReportScreen({
             className="bg-white rounded-2xl max-w-2xl w-full p-4 shadow-2xl relative"
           >
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="text-base font-bold text-slate-900">Scanned Label Image with OCR Bounding Boxes</h3>
+              <h3 className="text-base font-bold text-slate-900">Scanned Packaging Image</h3>
               <button
                 type="button"
                 onClick={() => setIsFullImageModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 flex items-center justify-center font-bold"
+                className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 flex items-center justify-center font-bold cursor-pointer"
               >
                 ✕
               </button>
             </div>
             <div className="py-4 flex justify-center bg-slate-50 rounded-xl mt-3">
-              <DetectedTextBackOfPackGraphic className="w-full max-w-md h-auto" />
+              {scan.imageUrl ? (
+                <img src={scan.imageUrl} alt={scan.productName} className="max-w-md max-h-[70vh] object-contain rounded-lg shadow-sm" />
+              ) : (
+                <ProductImageThumbnail productName={scan.productName} imageUrl={scan.imageUrl} className="w-48 h-48" />
+              )}
             </div>
             <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
-              <span>Back of pack declaration panel • Detected 8 bounding boxes</span>
+              <span>{scan.productName} ({scan.manufacturer})</span>
               <button
                 type="button"
                 onClick={() => setIsFullImageModalOpen(false)}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg"
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg cursor-pointer"
               >
-                Done
+                Close
               </button>
             </div>
           </div>
@@ -256,12 +260,12 @@ export function ReportScreen({
               </div>
 
               {/* Status Box */}
-              <div className={`mt-4 p-4 rounded-xl ${
+              <div className={`mt-4 p-4 rounded-xl border ${
                 scan.status === 'COMPLIANT'
-                  ? 'bg-emerald-50/80 dark:bg-emerald-950/60 border border-emerald-200/70 dark:border-emerald-800/70 text-emerald-950 dark:text-emerald-100'
+                  ? 'bg-emerald-50/90 border-emerald-200/90 text-emerald-950 dark:bg-emerald-950/60 dark:border-emerald-800/70 dark:text-emerald-100'
                   : scan.status === 'NON_COMPLIANT'
-                  ? 'bg-red-50/80 dark:bg-red-950/60 border border-red-200/70 dark:border-red-800/70 text-red-950 dark:text-red-100'
-                  : 'bg-amber-50/80 dark:bg-amber-950/60 border border-amber-200/70 dark:border-amber-800/70 text-amber-950 dark:text-amber-100'
+                  ? 'bg-red-50/90 border-red-200/90 text-red-950 dark:bg-red-950/60 dark:border-red-800/70 dark:text-red-100'
+                  : 'bg-amber-50/90 border-amber-200/90 text-amber-950 dark:bg-amber-950/60 dark:border-amber-800/70 dark:text-amber-100'
               }`}>
                 <div className="flex items-center gap-2 mb-1.5">
                   {scan.status === 'COMPLIANT' && (
@@ -303,8 +307,8 @@ export function ReportScreen({
               </div>
             </div>
 
-            {/* 4 Tabs Bar */}
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
+            {/* Main Tabs (Overview / Extracted Information / Rule Checks / Images & Evidence) */}
+            <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200/80">
               <button
                 type="button"
                 onClick={() => setActiveTab('overview')}
@@ -360,7 +364,7 @@ export function ReportScreen({
                     Compliance Summary
                   </h3>
                   <div className="grid grid-cols-4 gap-3">
-                    <div className="rounded-xl bg-[#EDF9F2] dark:bg-emerald-950/50 dark:border dark:border-emerald-800/50 p-3 text-center flex flex-col items-center justify-center">
+                    <div className="rounded-xl bg-[#EDF9F2] border border-emerald-200/80 dark:bg-emerald-950/50 dark:border-emerald-800/50 p-3 text-center flex flex-col items-center justify-center">
                       <div className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
                         <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                           <polyline points="20 6 9 17 4 12" />
@@ -370,7 +374,7 @@ export function ReportScreen({
                       <div className="text-xs font-semibold text-slate-600 dark:text-emerald-300 mt-0.5">Passed</div>
                     </div>
 
-                    <div className="rounded-xl bg-[#FEECEC] dark:bg-red-950/50 dark:border dark:border-red-800/50 p-3 text-center flex flex-col items-center justify-center">
+                    <div className="rounded-xl bg-[#FEECEC] border border-red-200/80 dark:bg-red-950/50 dark:border-red-800/50 p-3 text-center flex flex-col items-center justify-center">
                       <div className="w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center shrink-0">
                         <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                           <line x1="18" y1="6" x2="6" y2="18" />
@@ -381,7 +385,7 @@ export function ReportScreen({
                       <div className="text-xs font-semibold text-slate-600 dark:text-red-300 mt-0.5">Failed</div>
                     </div>
 
-                    <div className="rounded-xl bg-[#FEF6E5] dark:bg-amber-950/50 dark:border dark:border-amber-800/50 p-3 text-center flex flex-col items-center justify-center">
+                    <div className="rounded-xl bg-[#FEF6E5] border border-amber-200/80 dark:bg-amber-950/50 dark:border-amber-800/50 p-3 text-center flex flex-col items-center justify-center">
                       <div className="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center shrink-0">
                         <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                           <line x1="12" y1="8" x2="12" y2="13" />
@@ -392,7 +396,7 @@ export function ReportScreen({
                       <div className="text-xs font-semibold text-slate-600 dark:text-amber-300 mt-0.5">Needs Review</div>
                     </div>
 
-                    <div className="rounded-xl bg-[#F1F5F9] dark:bg-slate-800/60 dark:border dark:border-slate-700/50 p-3 text-center flex flex-col items-center justify-center">
+                    <div className="rounded-xl bg-[#F1F5F9] border border-slate-200 dark:bg-slate-800/60 dark:border-slate-700/50 p-3 text-center flex flex-col items-center justify-center">
                       <div className="w-6 h-6 rounded-full bg-slate-500 text-white flex items-center justify-center shrink-0">
                         <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                           <line x1="6" y1="12" x2="18" y2="12" />
@@ -616,11 +620,15 @@ export function ReportScreen({
             {activeTab === 'evidence' && (
               <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-2xs space-y-4">
                 <div className="border-b border-slate-100 pb-3">
-                  <h3 className="text-base font-bold text-slate-900">Label Inspection Evidence & Bounding Boxes</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">High-resolution statutory bounding boxes extracted from packaging image</p>
+                  <h3 className="text-base font-bold text-slate-900">Scanned Packaging Image Evidence</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Packaging image submitted for Legal Metrology compliance verification</p>
                 </div>
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex items-center justify-center">
-                  <DetectedTextBackOfPackGraphic className="w-full max-w-lg h-auto" />
+                  {scan.imageUrl ? (
+                    <img src={scan.imageUrl} alt={scan.productName} className="w-full max-w-lg h-auto max-h-[500px] object-contain rounded-xl shadow-xs" />
+                  ) : (
+                    <ProductImageThumbnail productName={scan.productName} imageUrl={scan.imageUrl} className="w-64 h-64" />
+                  )}
                 </div>
               </div>
             )}
@@ -691,39 +699,7 @@ export function ReportScreen({
               </div>
             </div>
 
-            {/* Card 2: Label Image */}
-            <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-2xs">
-              <div className="flex items-center justify-between mb-3.5">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-bold text-slate-900">Label Image</h3>
-                  <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
-                    Back of Pack
-                  </span>
-                </div>
-              </div>
 
-              {/* Graphic container with detected text overlay */}
-              <div className="bg-slate-50 rounded-xl p-3 border border-slate-200/80 flex items-center justify-center overflow-hidden">
-                <DetectedTextBackOfPackGraphic className="w-full h-auto max-h-64 object-contain" />
-              </div>
-
-              <div className="mt-3.5 pt-3 border-t border-slate-100 flex items-center justify-between">
-                <span className="text-xs text-slate-500 font-medium">Bounding boxes: 8 verified</span>
-                <button
-                  type="button"
-                  onClick={() => setIsFullImageModalOpen(true)}
-                  className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer"
-                >
-                  <span>View Full Image</span>
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="15 3 21 3 21 9" />
-                    <polyline points="9 21 3 21 3 15" />
-                    <line x1="21" y1="3" x2="14" y2="10" />
-                    <line x1="3" y1="21" x2="10" y2="14" />
-                  </svg>
-                </button>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -826,12 +802,12 @@ export function ReportScreen({
           </div>
 
           {/* Right: Status Box */}
-          <div className={`p-3.5 rounded-2xl max-w-sm shrink-0 ${
+          <div className={`p-3.5 rounded-2xl max-w-sm shrink-0 border ${
             scan.status === 'COMPLIANT'
-              ? 'bg-[#EDF9F2] text-emerald-950 dark:bg-emerald-950/60 dark:text-emerald-100'
+              ? 'bg-emerald-50/90 border-emerald-200/90 text-emerald-950 dark:bg-emerald-950/60 dark:border-emerald-800/70 dark:text-emerald-100'
               : scan.status === 'NON_COMPLIANT'
-              ? 'bg-[#FEECEC] text-red-950 dark:bg-red-950/60 dark:text-red-100'
-              : 'bg-[#FEF6E5] text-amber-950 dark:bg-amber-950/60 dark:text-amber-100'
+              ? 'bg-red-50/90 border-red-200/90 text-red-950 dark:bg-red-950/60 dark:border-red-800/70 dark:text-red-100'
+              : 'bg-amber-50/90 border-amber-200/90 text-amber-950 dark:bg-amber-950/60 dark:border-amber-800/70 dark:text-amber-100'
           }`}>
             <div className="flex items-center gap-2 mb-1.5">
               {scan.status === 'COMPLIANT' && (
@@ -920,7 +896,7 @@ export function ReportScreen({
             </h3>
             <div className="grid grid-cols-4 gap-2 sm:gap-3">
               {/* Passed Card */}
-              <div className="rounded-2xl bg-[#EDF9F2] dark:bg-emerald-950/50 dark:border dark:border-emerald-800/40 py-2.5 px-1.5 sm:py-3 sm:px-2 text-center flex flex-col items-center justify-center transition-transform hover:scale-[1.02]">
+              <div className="rounded-2xl bg-[#EDF9F2] border border-emerald-200/80 dark:bg-emerald-950/50 dark:border-emerald-800/40 py-2.5 px-1.5 sm:py-3 sm:px-2 text-center flex flex-col items-center justify-center transition-transform hover:scale-[1.02]">
                 <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
                   <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="20 6 9 17 4 12" />
@@ -935,7 +911,7 @@ export function ReportScreen({
               </div>
 
               {/* Failed Card */}
-              <div className="rounded-2xl bg-[#FEECEC] dark:bg-red-950/50 dark:border dark:border-red-800/40 py-2.5 px-1.5 sm:py-3 sm:px-2 text-center flex flex-col items-center justify-center transition-transform hover:scale-[1.02]">
+              <div className="rounded-2xl bg-[#FEECEC] border border-red-200/80 dark:bg-red-950/50 dark:border-red-800/40 py-2.5 px-1.5 sm:py-3 sm:px-2 text-center flex flex-col items-center justify-center transition-transform hover:scale-[1.02]">
                 <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-red-600 text-white flex items-center justify-center shrink-0">
                   <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18" />
@@ -951,7 +927,7 @@ export function ReportScreen({
               </div>
 
               {/* Warning Card */}
-              <div className="rounded-2xl bg-[#FEF6E5] dark:bg-amber-950/50 dark:border dark:border-amber-800/40 py-2.5 px-1.5 sm:py-3 sm:px-2 text-center flex flex-col items-center justify-center transition-transform hover:scale-[1.02]">
+              <div className="rounded-2xl bg-[#FEF6E5] border border-amber-200/80 dark:bg-amber-950/50 dark:border-amber-800/40 py-2.5 px-1.5 sm:py-3 sm:px-2 text-center flex flex-col items-center justify-center transition-transform hover:scale-[1.02]">
                 <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-amber-500 text-white flex items-center justify-center shrink-0">
                   <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="12" y1="8" x2="12" y2="13" />
@@ -962,12 +938,12 @@ export function ReportScreen({
                   {scan.summary.warning}
                 </div>
                 <div className="text-[10px] sm:text-xs font-medium text-slate-600 dark:text-amber-300 mt-1 leading-tight text-center">
-                  Warning
+                  Needs Review
                 </div>
               </div>
 
               {/* Not Applicable Card */}
-              <div className="rounded-2xl bg-[#F1F5F9] dark:bg-slate-800/60 dark:border dark:border-slate-700/40 py-2.5 px-1.5 sm:py-3 sm:px-2 text-center flex flex-col items-center justify-center transition-transform hover:scale-[1.02]">
+              <div className="rounded-2xl bg-[#F1F5F9] border border-slate-200 dark:bg-slate-800/60 dark:border-slate-700/40 py-2.5 px-1.5 sm:py-3 sm:px-2 text-center flex flex-col items-center justify-center transition-transform hover:scale-[1.02]">
                 <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-slate-500 text-white flex items-center justify-center shrink-0">
                   <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="6" y1="12" x2="18" y2="12" />

@@ -175,6 +175,21 @@ export default function Home() {
     window.localStorage.setItem('compliscan-theme', themePreference);
   }, [themePreference]);
 
+  const resolvedTheme = themePreference === 'system'
+    ? (systemPrefersDark ? 'dark' : 'light')
+    : themePreference;
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', resolvedTheme);
+      if (resolvedTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    }
+  }, [resolvedTheme]);
+
   // Subscribe to Firebase Auth changes with mobile cache safety
   useEffect(() => {
     const unsubscribe = FirebaseAuthService.onAuthStateChange(async (user) => {
@@ -228,6 +243,9 @@ export default function Home() {
       handleRequireAuth('Please sign in to view your past product scans and statutory compliance reports.');
       return;
     }
+    setIsCameraOpen(false);
+    setIsGuidelinesOpen(false);
+    setErrorMessage(null);
     setActiveTab(tab);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -450,9 +468,7 @@ export default function Home() {
     setSelectedScan(null);
   };
 
-  const resolvedTheme = themePreference === 'system'
-    ? (systemPrefersDark ? 'dark' : 'light')
-    : themePreference;
+
 
   return (
     <div data-theme={resolvedTheme} className="min-h-screen bg-slate-100 text-slate-900 selection:bg-blue-500 selection:text-white">
@@ -500,61 +516,63 @@ export default function Home() {
 
           {/* Main Content Viewport */}
           <main className="flex-1 px-4 pt-6 pb-36 sm:pb-40 overflow-y-auto">
-            {activeTab === 'home' && (
-              <HomeScreen
-                onOpenScanningCamera={() => setIsCameraOpen(true)}
-                onImageFileSelected={handleProcessScanFile}
-                onNavigateTab={handleTabChange}
-                onOpenGuidelinesModal={() => setIsGuidelinesOpen(true)}
-                onShowLoadingModal={() => setIsScanMinimized(false)}
-                isProcessing={isProcessing}
-                isVerifiedUser={isVerifiedUser}
-                onRequireAuth={handleRequireAuth}
-              />
-            )}
+            <div key={activeTab} className="animate-page-shift min-h-full">
+              {activeTab === 'home' && (
+                <HomeScreen
+                  onOpenScanningCamera={() => setIsCameraOpen(true)}
+                  onImageFileSelected={handleProcessScanFile}
+                  onNavigateTab={handleTabChange}
+                  onOpenGuidelinesModal={() => setIsGuidelinesOpen(true)}
+                  onShowLoadingModal={() => setIsScanMinimized(false)}
+                  isProcessing={isProcessing}
+                  isVerifiedUser={isVerifiedUser}
+                  onRequireAuth={handleRequireAuth}
+                />
+              )}
 
-            {activeTab === 'history' && (
-              <HistoryScreen
-                scans={scans}
-                onSelectScan={(scan) => {
-                  setSelectedScan(scan);
-                  handleTabChange('reports');
-                }}
-                isVerifiedUser={isVerifiedUser}
-                onRequireAuth={handleRequireAuth}
-              />
-            )}
+              {activeTab === 'history' && (
+                <HistoryScreen
+                  scans={scans}
+                  onSelectScan={(scan) => {
+                    setSelectedScan(scan);
+                    handleTabChange('reports');
+                  }}
+                  isVerifiedUser={isVerifiedUser}
+                  onRequireAuth={handleRequireAuth}
+                />
+              )}
 
-            {activeTab === 'reports' && (
-              <ReportScreen
-                scan={selectedScan}
-                onBack={() => handleTabChange('history')}
-                onDownloadReport={() => {
-                  window.print();
-                }}
-                onScanAnother={() => {
-                  handleTabChange('home');
-                  setIsCameraOpen(true);
-                }}
-              />
-            )}
+              {activeTab === 'reports' && (
+                <ReportScreen
+                  scan={selectedScan}
+                  onBack={() => handleTabChange('history')}
+                  onDownloadReport={() => {
+                    window.print();
+                  }}
+                  onScanAnother={() => {
+                    handleTabChange('home');
+                    setIsCameraOpen(true);
+                  }}
+                />
+              )}
 
-            {activeTab === 'settings' && (
-              <SettingsScreen
-                currentUser={currentUser}
-                currentLanguage={currentLanguage}
-                onLanguageChange={setCurrentLanguage}
-                themePreference={themePreference}
-                onThemeChange={setThemePreference}
-                onOpenAuthModal={() => {
-                  setAuthRequiredMessage(undefined);
-                  setIsAuthModalOpen(true);
-                }}
-                onSignOut={handleSignOut}
-                onOpenGuidelinesModal={() => setIsGuidelinesOpen(true)}
-                onClearData={handleClearData}
-              />
-            )}
+              {activeTab === 'settings' && (
+                <SettingsScreen
+                  currentUser={currentUser}
+                  currentLanguage={currentLanguage}
+                  onLanguageChange={setCurrentLanguage}
+                  themePreference={themePreference}
+                  onThemeChange={setThemePreference}
+                  onOpenAuthModal={() => {
+                    setAuthRequiredMessage(undefined);
+                    setIsAuthModalOpen(true);
+                  }}
+                  onSignOut={handleSignOut}
+                  onOpenGuidelinesModal={() => setIsGuidelinesOpen(true)}
+                  onClearData={handleClearData}
+                />
+              )}
+            </div>
           </main>
 
           {/* Fixed Bottom Navigation Bar */}
@@ -580,79 +598,81 @@ export default function Home() {
         />
 
         {/* Screen Content Area */}
-        {activeTab === 'home' ? (
-          <main className="flex-1">
-            <HomeScreen
-              onOpenScanningCamera={() => setIsCameraOpen(true)}
-              onImageFileSelected={handleProcessScanFile}
-              onNavigateTab={handleTabChange}
-              onOpenGuidelinesModal={() => setIsGuidelinesOpen(true)}
-              onShowLoadingModal={() => setIsScanMinimized(false)}
-              isProcessing={isProcessing}
-              isVerifiedUser={isVerifiedUser}
-              onRequireAuth={handleRequireAuth}
-            />
-          </main>
-        ) : (
-          <main className="flex-1 p-6 lg:p-8 max-w-7xl w-full mx-auto overflow-y-auto">
-            {/* Error Banner */}
-            {errorMessage && (
-              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 flex items-center justify-between shadow-2xs">
-                <span>{errorMessage}</span>
-                <button
-                  type="button"
-                  onClick={() => setErrorMessage(null)}
-                  className="text-red-500 font-bold ml-2 cursor-pointer hover:text-red-700"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
-
-            {activeTab === 'history' && (
-              <HistoryScreen
-                scans={scans}
-                onSelectScan={(scan) => {
-                  setSelectedScan(scan);
-                  handleTabChange('reports');
-                }}
+        <div key={activeTab} className="flex-1 flex flex-col animate-page-shift">
+          {activeTab === 'home' ? (
+            <main className="flex-1">
+              <HomeScreen
+                onOpenScanningCamera={() => setIsCameraOpen(true)}
+                onImageFileSelected={handleProcessScanFile}
+                onNavigateTab={handleTabChange}
+                onOpenGuidelinesModal={() => setIsGuidelinesOpen(true)}
+                onShowLoadingModal={() => setIsScanMinimized(false)}
+                isProcessing={isProcessing}
                 isVerifiedUser={isVerifiedUser}
                 onRequireAuth={handleRequireAuth}
               />
-            )}
+            </main>
+          ) : (
+            <main className="flex-1 p-6 lg:p-8 max-w-7xl w-full mx-auto overflow-y-auto">
+              {/* Error Banner */}
+              {errorMessage && (
+                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 flex items-center justify-between shadow-2xs">
+                  <span>{errorMessage}</span>
+                  <button
+                    type="button"
+                    onClick={() => setErrorMessage(null)}
+                    className="text-red-500 font-bold ml-2 cursor-pointer hover:text-red-700"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
 
-            {activeTab === 'reports' && (
-              <ReportScreen
-                scan={selectedScan}
-                onBack={() => handleTabChange('history')}
-                onDownloadReport={() => {
-                  window.print();
-                }}
-                onScanAnother={() => {
-                  handleTabChange('home');
-                  setIsCameraOpen(true);
-                }}
-              />
-            )}
+              {activeTab === 'history' && (
+                <HistoryScreen
+                  scans={scans}
+                  onSelectScan={(scan) => {
+                    setSelectedScan(scan);
+                    handleTabChange('reports');
+                  }}
+                  isVerifiedUser={isVerifiedUser}
+                  onRequireAuth={handleRequireAuth}
+                />
+              )}
 
-            {activeTab === 'settings' && (
-              <SettingsScreen
-                currentUser={currentUser}
-                currentLanguage={currentLanguage}
-                onLanguageChange={setCurrentLanguage}
-                themePreference={themePreference}
-                onThemeChange={setThemePreference}
-                onOpenAuthModal={() => {
-                  setAuthRequiredMessage(undefined);
-                  setIsAuthModalOpen(true);
-                }}
-                onSignOut={handleSignOut}
-                onOpenGuidelinesModal={() => setIsGuidelinesOpen(true)}
-                onClearData={handleClearData}
-              />
-            )}
-          </main>
-        )}
+              {activeTab === 'reports' && (
+                <ReportScreen
+                  scan={selectedScan}
+                  onBack={() => handleTabChange('history')}
+                  onDownloadReport={() => {
+                    window.print();
+                  }}
+                  onScanAnother={() => {
+                    handleTabChange('home');
+                    setIsCameraOpen(true);
+                  }}
+                />
+              )}
+
+              {activeTab === 'settings' && (
+                <SettingsScreen
+                  currentUser={currentUser}
+                  currentLanguage={currentLanguage}
+                  onLanguageChange={setCurrentLanguage}
+                  themePreference={themePreference}
+                  onThemeChange={setThemePreference}
+                  onOpenAuthModal={() => {
+                    setAuthRequiredMessage(undefined);
+                    setIsAuthModalOpen(true);
+                  }}
+                  onSignOut={handleSignOut}
+                  onOpenGuidelinesModal={() => setIsGuidelinesOpen(true)}
+                  onClearData={handleClearData}
+                />
+              )}
+            </main>
+          )}
+        </div>
       </div>
 
       {/* ========================================================================= */}
