@@ -26,6 +26,7 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
   const [distanceStatus, setDistanceStatus] = useState<DistanceStatus>('searching');
   const [distanceProgress, setDistanceProgress] = useState<number>(50);
   const [isFlashing, setIsFlashing] = useState<boolean>(false);
+  const smoothedProgressRef = useRef<number>(50);
 
   const startCamera = useCallback(async () => {
     try {
@@ -59,6 +60,8 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
       setCapturedFile(null);
       setCapturedPreviewUrl(null);
       setDistanceStatus('searching');
+      smoothedProgressRef.current = 50;
+      setDistanceProgress(50);
       startCamera();
     } else {
       if (stream) {
@@ -71,6 +74,7 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
       }
       setCapturedFile(null);
       setDistanceStatus('searching');
+      smoothedProgressRef.current = 50;
     }
     return () => {
       if (stream) {
@@ -79,7 +83,7 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
     };
   }, [isOpen]);
 
-  // Real-time frame proximity & sharpness analyzer (runs every 180ms)
+  // Real-time dynamic distance & sharpness analyzer (runs every 120ms for buttery-smooth responsiveness)
   useEffect(() => {
     if (!isOpen || capturedFile || !hasPermission) return;
 
@@ -101,63 +105,110 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
       const imgData = aCtx.getImageData(0, 0, 160, 120);
       const data = imgData.data;
 
-      // Grayscale conversion
+      // Fast grayscale conversion
       const gray = new Uint8Array(160 * 120);
       for (let i = 0, j = 0; i < data.length; i += 4, j++) {
         gray[j] = (data[i] * 77 + data[i + 1] * 150 + data[i + 2] * 29) >> 8;
       }
 
-      // Robust Central Viewfinder Analysis:
-      // Focus on the central 70% viewfinder region of interest (ROI)
-      // Viewfinder ROI in 160x120: x: [26, 134], y: [18, 102]
-      let centerEdgeCount = 0;
-      let sumCenterGrad = 0;
+      // Build 1D histograms of edge coordinates across the frame
+      const histX = new Int32Array(160);
+      const histY = new Int32Array(120);
       let totalEdges = 0;
+      let centerEdges = 0;
+      let sumGradCenter = 0;
 
       for (let y = 3; y < 117; y++) {
         const row = y * 160;
-        const isYCenter = y >= 18 && y <= 102;
+        const isYCenter = y >= 20 && y <= 100;
         for (let x = 3; x < 157; x++) {
           const idx = row + x;
           const gx = Math.abs(gray[idx + 1] - gray[idx - 1]);
           const gy = Math.abs(gray[idx + 160] - gray[idx - 160]);
           const mag = gx + gy;
 
-          if (mag > 24) {
+          if (mag > 22) {
+            histX[x]++;
+            histY[y]++;
             totalEdges++;
+
             if (isYCenter && x >= 26 && x <= 134) {
-              centerEdgeCount++;
-              sumCenterGrad += mag;
+              centerEdges++;
+              sumGradCenter += mag;
             }
           }
         }
       }
 
-      const avgCenterSharpness = centerEdgeCount > 0 ? sumCenterGrad / centerEdgeCount : 0;
-
-      // 1. Not enough subject detail in viewfinder
-      if (centerEdgeCount < 22) {
-        if (totalEdges < 50) {
-          setDistanceStatus('searching');
-          setDistanceProgress(50);
-        } else {
-          setDistanceStatus('too_far');
-          setDistanceProgress(25);
-        }
+      // 1. Scene empty or camera pointing away from any object
+      if (totalEdges < 35 || centerEdges < 15) {
+        setDistanceStatus('searching');
+        smoothedProgressRef.current = smoothedProgressRef.current * 0.7 + 50 * 0.3;
+        setDistanceProgress(Math.round(smoothedProgressRef.current));
         return;
       }
 
-      // 2. Center has low sharpness / blurred focus
-      if (avgCenterSharpness < 7.0) {
+      const avgCenterSharpness = sumGradCenter / Math.max(1, centerEdges);
+
+      // 2. High spatial frequencies missing (out of focus / motion blur)
+      if (avgCenterSharpness < 6.4) {
         setDistanceStatus('blurry');
-        setDistanceProgress(50);
+        smoothedProgressRef.current = smoothedProgressRef.current * 0.7 + 50 * 0.3;
+        setDistanceProgress(Math.round(smoothedProgressRef.current));
         return;
       }
 
-      // 3. Commodity is centered in viewfinder with sharp contrast: Ideal Distance!
-      setDistanceStatus('optimal');
-      setDistanceProgress(50);
-    }, 180);
+      // 3. Compute effective horizontal & vertical spatial span using 10th to 90th percentiles
+      // (immune to stray edge noise from bezels/borders)
+      let countX = 0;
+      let p10X = 3, p90X = 156;
+      const target10X = totalEdges * 0.10;
+      const target90X = totalEdges * 0.90;
+
+      for (let x = 3; x < 157; x++) {
+        countX += histX[x];
+        if (countX >= target10X && p10X === 3) p10X = x;
+        if (countX >= target90X) {
+          p90X = x;
+          break;
+        }
+      }
+
+      let countY = 0;
+      let p10Y = 3, p90Y = 116;
+      const target10Y = totalEdges * 0.10;
+      const target90Y = totalEdges * 0.90;
+
+      for (let y = 3; y < 117; y++) {
+        countY += histY[y];
+        if (countY >= target10Y && p10Y === 3) p10Y = y;
+        if (countY >= target90Y) {
+          p90Y = y;
+          break;
+        }
+      }
+
+      const spanX = (p90X - p10X) / 160;
+      const spanY = (p90Y - p10Y) / 120;
+      const subjectSpan = spanX * 0.55 + spanY * 0.45;
+
+      // Map subjectSpan (typically 0.22 when far to 0.80 when close) into a 0 - 100 distance score
+      const rawProgress = Math.min(95, Math.max(5, ((subjectSpan - 0.22) / 0.58) * 100));
+
+      // Responsive Exponential Moving Average smoothing
+      smoothedProgressRef.current = smoothedProgressRef.current * 0.5 + rawProgress * 0.5;
+      const currentProgress = Math.round(smoothedProgressRef.current);
+      setDistanceProgress(currentProgress);
+
+      // Dynamic distance status thresholds
+      if (currentProgress < 35) {
+        setDistanceStatus('too_far');
+      } else if (currentProgress > 72) {
+        setDistanceStatus('too_close');
+      } else {
+        setDistanceStatus('optimal');
+      }
+    }, 120);
 
     return () => clearInterval(intervalId);
   }, [isOpen, capturedFile, hasPermission]);
@@ -381,7 +432,7 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
                     </div>
                   ) : distanceStatus === 'too_close' ? (
                     <div className="bg-amber-600/95 text-white px-3.5 py-1 rounded-full text-xs font-bold shadow-lg shadow-amber-600/40 border border-amber-300 flex items-center gap-1.5">
-                      <span>↔ Move Phone Slightly Back</span>
+                      <span>↔ Too Close — Move Phone Back</span>
                     </div>
                   ) : distanceStatus === 'blurry' ? (
                     <div className="bg-amber-600/95 text-white px-3.5 py-1 rounded-full text-xs font-bold shadow-lg shadow-amber-600/40 border border-amber-300 flex items-center gap-1.5">
@@ -393,18 +444,37 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
                     </div>
                   )}
 
-                  {/* 3-Point Proximity Bar */}
-                  <div className="w-40 bg-black/60 backdrop-blur-xs px-2.5 py-1 rounded-full border border-white/10 flex items-center justify-between text-[10px] font-semibold text-slate-300">
-                    <span className={distanceStatus === 'too_far' ? 'text-amber-300 font-bold' : 'text-slate-500'}>
-                      Far
-                    </span>
-                    <span className={distanceStatus === 'optimal' ? 'text-emerald-300 font-bold flex items-center gap-1' : 'text-slate-500'}>
-                      {distanceStatus === 'optimal' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-ping" />}
-                      ● Ideal
-                    </span>
-                    <span className={distanceStatus === 'optimal' ? 'text-emerald-400 font-semibold' : 'text-slate-500'}>
-                      Ready
-                    </span>
+                  {/* Real-time Dynamic Proximity Slider Meter */}
+                  <div className="w-48 bg-black/75 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/15 flex flex-col gap-1 shadow-lg">
+                    <div className="flex items-center justify-between text-[9px] font-bold tracking-wider">
+                      <span className={`transition-colors duration-150 ${distanceStatus === 'too_far' ? 'text-amber-300 font-black drop-shadow-[0_0_4px_rgba(251,191,36,0.8)]' : 'text-slate-400'}`}>
+                        Far
+                      </span>
+                      <span className={`transition-colors duration-150 flex items-center gap-1 ${distanceStatus === 'optimal' ? 'text-emerald-300 font-black drop-shadow-[0_0_4px_rgba(52,211,153,0.8)]' : 'text-slate-400'}`}>
+                        {distanceStatus === 'optimal' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-ping" />}
+                        ● Ideal
+                      </span>
+                      <span className={`transition-colors duration-150 ${distanceStatus === 'too_close' ? 'text-amber-300 font-black drop-shadow-[0_0_4px_rgba(251,191,36,0.8)]' : 'text-slate-400'}`}>
+                        Close
+                      </span>
+                    </div>
+
+                    {/* Smooth Continuous Track with Target Zone */}
+                    <div className="relative w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
+                      {/* Ideal Zone in middle (35% to 72%) */}
+                      <div className="absolute left-[35%] right-[28%] inset-y-0 bg-emerald-500/40 rounded-full" />
+                      {/* Live Sliding Indicator Dot */}
+                      <div
+                        className={`absolute top-0 bottom-0 w-3 -ml-1.5 rounded-full transition-all duration-100 shadow-sm ${
+                          distanceStatus === 'optimal'
+                            ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,1)]'
+                            : distanceStatus === 'too_far' || distanceStatus === 'too_close'
+                            ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,1)]'
+                            : 'bg-white/60'
+                        }`}
+                        style={{ left: `${distanceProgress}%` }}
+                      />
+                    </div>
                   </div>
                 </div>
 
