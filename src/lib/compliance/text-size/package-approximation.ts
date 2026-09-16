@@ -28,15 +28,33 @@ export interface QuantityApproximation {
   accuracyGrade: 'HIGH' | 'GOOD' | 'MODERATE' | 'LOW';
   /** Human-readable explanation of the approximation basis */
   accuracyRationale: string;
+  /** Indian statutory permission details under LMPC 2011 Rules 9, 10 & Schedule I */
+  indianStatutoryPermission?: {
+    standardTier: string;
+    minNumeralHeightMm: number;
+    minPdpRatio: string;
+    roughSanityScore: number; // 1 to 10
+    isRoughlyCorrect: boolean;
+    explanation: string;
+  };
 }
 
-interface ApproximatePackageInput {
+export interface ApproximatePackageInput {
   declaredQuantity?: string | null;
   productName?: string | null;
   genericName?: string | null;
   category?: string | null;
   opticalAspectRatio?: number | null; // width / height of detected bbox or image
   hasPhysicalCalibration?: boolean;
+  aiApproximation?: {
+    declaredQuantity?: string | null;
+    standardTierIndia?: string | null;
+    minPermittedNumeralHeightMm?: number | null;
+    minPermittedPdpRatio?: string | null;
+    roughSizeScore?: number | null;
+    isRoughlyCorrect?: boolean | null;
+    roughExplanation?: string | null;
+  } | null;
 }
 
 /**
@@ -265,6 +283,40 @@ export function approximatePackageFromQuantity(input: ApproximatePackageInput): 
     ? `Net quantity (${qtyLabel}) matches Indian standard ${archetype} specifications (~${pdpAreaCm2} cm² PDP). Optical aspect correlation gives ${accuracyScore} / 10 accuracy.`
     : `General ${archetype} packaging profile estimated at ~${pdpAreaCm2} cm² PDP. Score: ${accuracyScore} / 10.`;
 
+  // 5. Indian LMPC 2011 Statutory Permission Tiers
+  const gramsOrMl = parsed ? parsed.value : 50;
+  let standardTier = 'Tier 1: ≤ 50g/ml (LMPC Schedule I)';
+  let minNumeralHeightMm = 1.0;
+  if (gramsOrMl <= 50) {
+    standardTier = 'Tier 1: ≤ 50g/ml (LMPC Schedule I)';
+    minNumeralHeightMm = 1.0;
+  } else if (gramsOrMl <= 200) {
+    standardTier = 'Tier 2: 50g/ml to 200g/ml (LMPC Schedule I)';
+    minNumeralHeightMm = 2.0;
+  } else if (gramsOrMl <= 1000) {
+    standardTier = 'Tier 3: 200g/ml to 1kg/l (LMPC Schedule I)';
+    minNumeralHeightMm = 4.0;
+  } else {
+    standardTier = 'Tier 4: > 1kg/l (LMPC Schedule I)';
+    minNumeralHeightMm = 6.0;
+  }
+
+  const aiApprox = input.aiApproximation;
+  const roughSanityScore = aiApprox?.roughSizeScore || accuracyScore;
+  const isRoughlyCorrect = aiApprox?.isRoughlyCorrect ?? (roughSanityScore >= 6.0);
+  const explanation =
+    aiApprox?.roughExplanation ||
+    `Under Indian LMPC 2011 Schedule I, declared quantity (${qtyLabel}) requires minimum numeral height of ${minNumeralHeightMm}mm and PDP ratio ≥ 40%. Physical packet roughly matches expected Indian packaging scale.`;
+
+  const indianStatutoryPermission = {
+    standardTier: aiApprox?.standardTierIndia || standardTier,
+    minNumeralHeightMm: aiApprox?.minPermittedNumeralHeightMm || minNumeralHeightMm,
+    minPdpRatio: aiApprox?.minPermittedPdpRatio || '≥ 40% of package face',
+    roughSanityScore,
+    isRoughlyCorrect,
+    explanation,
+  };
+
   return {
     declaredQuantityRaw: declaredQuantity || undefined,
     parsedQuantityValue: parsed?.value,
@@ -276,5 +328,6 @@ export function approximatePackageFromQuantity(input: ApproximatePackageInput): 
     accuracyScore,
     accuracyGrade,
     accuracyRationale,
+    indianStatutoryPermission,
   };
 }

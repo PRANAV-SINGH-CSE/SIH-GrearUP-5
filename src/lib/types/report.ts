@@ -26,6 +26,16 @@ export const QuantityApproximationSchema = z.object({
   accuracyScore: z.number(),
   accuracyGrade: z.enum(['HIGH', 'GOOD', 'MODERATE', 'LOW']),
   accuracyRationale: z.string(),
+  indianStatutoryPermission: z
+    .object({
+      standardTier: z.string(),
+      minNumeralHeightMm: z.number(),
+      minPdpRatio: z.string(),
+      roughSanityScore: z.number(),
+      isRoughlyCorrect: z.boolean(),
+      explanation: z.string(),
+    })
+    .optional(),
 });
 export type QuantityApproximation = z.infer<typeof QuantityApproximationSchema>;
 

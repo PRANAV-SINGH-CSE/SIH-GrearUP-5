@@ -21,6 +21,21 @@ export class NovaAIExtractionProvider implements IAIExtractionProvider {
     const systemPrompt = `You are an expert Legal Metrology verification auditor for Indian packaged commodities under the Legal Metrology (Packaged Commodities) Rules, 2011.
 Extract all statutory mandatory declarations into valid JSON format.
 If a field is not present or cannot be found, set value to null. Do NOT hallucinate.
+
+QUANTITY-TO-LABEL SIZE PERMISSION IN INDIA (ROUGH APPROXIMATION):
+As soon as you detect the Net Quantity (e.g. 41.5g, 50g, 200ml, 1kg):
+1. Refer to Indian Legal Metrology (Packaged Commodities) Rules, 2011 permissions:
+   - Rule 9 & 10 and Schedule I (First Schedule) numeral height limits:
+     * <= 50g/ml: minimum numeral height is 1.0 mm (embossed: 2.0 mm)
+     * 50g/ml < Net Qty <= 200g/ml: minimum numeral height is 2.0 mm (embossed: 4.0 mm)
+     * 200g/ml < Net Qty <= 1kg/l: minimum numeral height is 4.0 mm (embossed: 6.0 mm)
+     * > 1kg/l: minimum numeral height is 6.0 mm (embossed: 8.0 mm)
+   - Principal Display Panel (PDP) permission (at least 40% of package face for rectangular packets).
+2. Make a very rough approximation / sanity check:
+   - Does this physical packet in the photo look roughly consistent with that declared quantity in India?
+   - Rate the rough approximation from 1 to 10.
+   - State whether it is roughly correct (true/false) and provide a rough plain-English explanation.
+
 Strictly return valid JSON adhering to this exact schema:
 {
   "productName": { "value": "string or null", "confidence": 0.95, "rawText": "string" },
@@ -38,6 +53,15 @@ Strictly return valid JSON adhering to this exact schema:
   "expiryDate": { "value": null, "confidence": 0 },
   "consumerCare": { "value": { "phone": "...", "email": "...", "address": "..." }, "confidence": 0.95 },
   "batchNumber": { "value": "string or null", "confidence": 0.95 },
+  "quantitySizeApproximation": {
+    "declaredQuantity": "string",
+    "standardTierIndia": "string (e.g. '<=50g single-serve sachet tier under LMPC Schedule I')",
+    "minPermittedNumeralHeightMm": 1.0,
+    "minPermittedPdpRatio": "40% of package face",
+    "roughSizeScore": 8,
+    "isRoughlyCorrect": true,
+    "roughExplanation": "string (e.g. 'Roughly consistent: A 41.5g biscuit packet matches typical ~120x65mm single-serve packaging in India. Required min numeral height is 1.0mm. Current label size and font appear roughly permitted under Indian LMPC rules.')"
+  },
   "overallConfidence": 0.95
 }
 Return ONLY valid JSON. Do not wrap in markdown code fences.`;

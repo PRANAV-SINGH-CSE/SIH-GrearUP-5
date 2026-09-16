@@ -72,6 +72,17 @@ export const PartyDetailSchema = z.object({
 });
 export type PartyDetail = z.infer<typeof PartyDetailSchema>;
 
+export const QuantitySizeApproximationSchema = z.object({
+  declaredQuantity: z.string().nullish(),
+  standardTierIndia: z.string().nullish(),
+  minPermittedNumeralHeightMm: z.number().nullish(),
+  minPermittedPdpRatio: z.string().nullish(),
+  roughSizeScore: z.number().min(1).max(10).nullish(),
+  isRoughlyCorrect: z.boolean().nullish(),
+  roughExplanation: z.string().nullish(),
+});
+export type QuantitySizeApproximation = z.infer<typeof QuantitySizeApproximationSchema>;
+
 export const ProductDeclarationSchema = z.object({
   productName: createFieldSchema(z.string()),
   genericName: createFieldSchema(z.string()),
@@ -88,6 +99,7 @@ export const ProductDeclarationSchema = z.object({
   expiryDate: createFieldSchema(DateDetailSchema),
   consumerCare: createFieldSchema(ConsumerCareDetailSchema),
   batchNumber: createFieldSchema(z.string()),
+  quantitySizeApproximation: QuantitySizeApproximationSchema.optional(),
   rawFields: z.record(z.string(), z.string()).default({}),
   overallConfidence: z.number().min(0).max(1).default(1.0),
   extractionMethod: ExtractionMethodSchema.default('deterministic'),

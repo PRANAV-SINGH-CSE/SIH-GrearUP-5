@@ -54,6 +54,7 @@ export class AITextSizeInspectionService {
       genericName: product.genericName?.value,
       category,
       hasPhysicalCalibration,
+      aiApproximation: product.quantitySizeApproximation,
     });
 
     let pdpAreaCm2 = approximation.estimatedPdpAreaCm2;

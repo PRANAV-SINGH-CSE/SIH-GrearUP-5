@@ -55,6 +55,14 @@ export interface AppScanItem {
     accuracyScore: number;
     accuracyGrade: 'HIGH' | 'GOOD' | 'MODERATE' | 'LOW';
     accuracyRationale: string;
+    indianStatutoryPermission?: {
+      standardTier: string;
+      minNumeralHeightMm: number;
+      minPdpRatio: string;
+      roughSanityScore: number;
+      isRoughlyCorrect: boolean;
+      explanation: string;
+    };
   };
 }
 

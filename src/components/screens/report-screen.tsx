@@ -132,14 +132,42 @@ export function PackageApproximationCard({
         </div>
       </div>
 
-      {/* Rationale explanation banner */}
-      <div className="rounded-xl bg-emerald-50/70 border border-emerald-200/60 p-3 flex items-start gap-2.5 text-xs text-slate-700">
-        <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 text-xs font-bold mt-0.5">
-          ✓
+      {/* Rationale & Indian Statutory Permission Banner */}
+      <div className="space-y-2">
+        <div className="rounded-xl bg-emerald-50/80 border border-emerald-200/70 p-3 flex items-start gap-2.5 text-xs text-slate-700">
+          <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 text-xs font-bold mt-0.5">
+            ✓
+          </div>
+          <div className="flex-1 leading-relaxed">
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+              <strong className="font-bold text-emerald-950">
+                🇮🇳 Indian LMPC Label Size Permission:
+              </strong>
+              <span className="bg-emerald-100/90 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-md border border-emerald-300/60">
+                {approx.indianStatutoryPermission?.standardTier || 'LMPC Schedule I Tier'}
+              </span>
+              <span className="bg-blue-50 text-blue-800 text-[10px] font-semibold px-2 py-0.5 rounded-md border border-blue-200">
+                Min Numeral: {approx.indianStatutoryPermission?.minNumeralHeightMm ?? 1.0} mm
+              </span>
+            </div>
+            <p className="text-slate-600 text-xs">
+              {approx.indianStatutoryPermission?.explanation || approx.accuracyRationale}
+            </p>
+          </div>
         </div>
-        <div className="flex-1 leading-relaxed">
-          <strong className="font-semibold text-emerald-950">Statutory Approximation Basis: </strong>
-          {approx.accuracyRationale}
+
+        {/* Rough Sanity Check Status */}
+        <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border border-slate-200/60 rounded-xl text-[11px]">
+          <span className="text-slate-600 font-medium">
+            Quantity-to-Package Rough Sanity (AI Guess):
+          </span>
+          <span className="font-bold text-emerald-700 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            {approx.indianStatutoryPermission?.isRoughlyCorrect ? '✓ Roughly Correct (Plausible)' : '⚠ Check Package Dimensions'}
+            <span className="text-slate-400 font-normal">
+              ({approx.indianStatutoryPermission?.roughSanityScore ?? approx.accuracyScore}/10)
+            </span>
+          </span>
         </div>
       </div>
     </div>
