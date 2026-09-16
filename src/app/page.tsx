@@ -22,6 +22,7 @@ import { compressImageForUpload } from '@/lib/utils/client-image';
 import { MeasurementMetadata } from '@/lib/compliance/rules/rule.interface';
 import { BackgroundKeepAlive } from '@/lib/mobile/background-keepalive.service';
 import { BackgroundScanService } from '@/lib/mobile/background-scan.service';
+import { AuditAlertService } from '@/lib/notifications/audit-alert.service';
 
 type Language = 'en' | 'hi';
 type ThemePreference = 'light' | 'dark' | 'system';
@@ -303,6 +304,7 @@ export default function Home() {
             setSelectedScan(restoredItem);
             setActiveTab('reports');
             BackgroundScanService.clearActiveSession();
+            AuditAlertService.triggerAlert(restoredItem);
           }
         })
         .catch(() => {})
@@ -579,6 +581,9 @@ export default function Home() {
       setSelectedScan(newScanItem);
       setActiveTab('reports');
       window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      // Trigger real-time alert (haptics, warning chime & system notification) if non-compliant
+      AuditAlertService.triggerAlert(newScanItem);
     } catch (err: unknown) {
       console.error('Scan failed:', err);
       setErrorMessage(err instanceof Error ? err.message : 'An error occurred during verification');

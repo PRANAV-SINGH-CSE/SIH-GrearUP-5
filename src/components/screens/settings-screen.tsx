@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { User } from 'firebase/auth';
+import { AuditAlertService } from '@/lib/notifications/audit-alert.service';
 
 export interface SettingsScreenProps {
   currentUser: User | null;
@@ -27,11 +28,7 @@ export function SettingsScreen({
   onClearData,
 }: SettingsScreenProps) {
   const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = window.localStorage.getItem('compliscan-notifications');
-      if (saved !== null) return saved === 'true';
-    }
-    return true;
+    return AuditAlertService.isEnabled();
   });
   const [modalType, setModalType] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -41,13 +38,23 @@ export function SettingsScreen({
     setTimeout(() => setToastMessage(null), 2500);
   };
 
-  const toggleNotifications = () => {
+  const toggleNotifications = async () => {
     const nextVal = !notificationsEnabled;
     setNotificationsEnabled(nextVal);
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('compliscan-notifications', String(nextVal));
+    AuditAlertService.setEnabled(nextVal);
+
+    if (nextVal) {
+      const perm = await AuditAlertService.requestPermission();
+      if (perm === 'granted') {
+        showToast('Audit alerts enabled (browser & sound alerts active)');
+      } else if (perm === 'denied') {
+        showToast('Audit alerts enabled (browser notifications blocked in site settings)');
+      } else {
+        showToast('Audit alerts enabled (sound & haptic alerts active)');
+      }
+    } else {
+      showToast('Audit alerts disabled');
     }
-    showToast(`Audit notifications ${nextVal ? 'enabled' : 'disabled'}`);
   };
 
   const handleClearCache = () => {
