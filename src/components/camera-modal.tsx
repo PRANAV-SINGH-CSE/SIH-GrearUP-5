@@ -25,6 +25,7 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
   // Real-time distance and sharpness assistance
   const [distanceStatus, setDistanceStatus] = useState<DistanceStatus>('searching');
   const [distanceProgress, setDistanceProgress] = useState<number>(50);
+  const [isFlashing, setIsFlashing] = useState<boolean>(false);
 
   const startCamera = useCallback(async () => {
     try {
@@ -78,7 +79,7 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
     };
   }, [isOpen]);
 
-  // Real-time frame proximity & sharpness analyzer (runs every 200ms)
+  // Real-time frame proximity & sharpness analyzer (runs every 180ms)
   useEffect(() => {
     if (!isOpen || capturedFile || !hasPermission) return;
 
@@ -106,69 +107,57 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
         gray[j] = (data[i] * 77 + data[i + 1] * 150 + data[i + 2] * 29) >> 8;
       }
 
-      // Compute gradient energy and edge bounding span
-      let edgeCount = 0;
-      let minX = 160, maxX = 0, minY = 120, maxY = 0;
-      let sumGradCenter = 0;
-      let centerCount = 0;
+      // Robust Central Viewfinder Analysis:
+      // Focus on the central 70% viewfinder region of interest (ROI)
+      // Viewfinder ROI in 160x120: x: [26, 134], y: [18, 102]
+      let centerEdgeCount = 0;
+      let sumCenterGrad = 0;
+      let totalEdges = 0;
 
-      // Skip 2px margin around edges to eliminate frame borders
-      for (let y = 2; y < 118; y++) {
+      for (let y = 3; y < 117; y++) {
         const row = y * 160;
-        for (let x = 2; x < 158; x++) {
+        const isYCenter = y >= 18 && y <= 102;
+        for (let x = 3; x < 157; x++) {
           const idx = row + x;
           const gx = Math.abs(gray[idx + 1] - gray[idx - 1]);
           const gy = Math.abs(gray[idx + 160] - gray[idx - 160]);
           const mag = gx + gy;
 
-          if (mag > 28) {
-            edgeCount++;
-            if (x < minX) minX = x;
-            if (x > maxX) maxX = x;
-            if (y < minY) minY = y;
-            if (y > maxY) maxY = y;
-          }
-
-          // Center region focus calculation (middle 50%)
-          if (x >= 40 && x <= 120 && y >= 30 && y <= 90) {
-            sumGradCenter += mag;
-            centerCount++;
+          if (mag > 24) {
+            totalEdges++;
+            if (isYCenter && x >= 26 && x <= 134) {
+              centerEdgeCount++;
+              sumCenterGrad += mag;
+            }
           }
         }
       }
 
-      // If very few edges, commodity is not yet aligned
-      if (edgeCount < 70) {
-        setDistanceStatus('searching');
+      const avgCenterSharpness = centerEdgeCount > 0 ? sumCenterGrad / centerEdgeCount : 0;
+
+      // 1. Not enough subject detail in viewfinder
+      if (centerEdgeCount < 22) {
+        if (totalEdges < 50) {
+          setDistanceStatus('searching');
+          setDistanceProgress(50);
+        } else {
+          setDistanceStatus('too_far');
+          setDistanceProgress(25);
+        }
+        return;
+      }
+
+      // 2. Center has low sharpness / blurred focus
+      if (avgCenterSharpness < 7.0) {
+        setDistanceStatus('blurry');
         setDistanceProgress(50);
         return;
       }
 
-      const spanX = (maxX - minX) / 160;
-      const spanY = (maxY - minY) / 120;
-      const coverage = Math.max(spanX, spanY);
-      const avgCenterSharpness = centerCount > 0 ? sumGradCenter / centerCount : 0;
-
-      // Proximity heuristics:
-      // Coverage < 0.35 => Too far away (text will be illegible)
-      // Coverage > 0.88 or bleeding onto outer edges => Too close (edges clipped)
-      // Coverage 0.35 - 0.88 with good sharpness => Ideal distance
-      if (coverage < 0.36) {
-        setDistanceStatus('too_far');
-        setDistanceProgress(Math.max(10, Math.round(coverage * 80)));
-      } else if (coverage > 0.88 || minX <= 3 || maxX >= 156 || minY <= 3 || maxY >= 116) {
-        setDistanceStatus('too_close');
-        setDistanceProgress(Math.min(95, Math.round(coverage * 100)));
-      } else {
-        if (avgCenterSharpness < 12) {
-          setDistanceStatus('blurry');
-          setDistanceProgress(Math.round(coverage * 100));
-        } else {
-          setDistanceStatus('optimal');
-          setDistanceProgress(Math.round(coverage * 100));
-        }
-      }
-    }, 200);
+      // 3. Commodity is centered in viewfinder with sharp contrast: Ideal Distance!
+      setDistanceStatus('optimal');
+      setDistanceProgress(50);
+    }, 180);
 
     return () => clearInterval(intervalId);
   }, [isOpen, capturedFile, hasPermission]);
@@ -182,16 +171,44 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      try {
+        navigator.vibrate(50);
+      } catch (_) {}
+    }
+
+    setIsFlashing(true);
+    setTimeout(() => setIsFlashing(false), 140);
+
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    canvas.toBlob((blob) => {
+    const onBlobReady = (blob: Blob | null) => {
       if (blob) {
         const file = new File([blob], `scan_${Date.now()}.jpg`, { type: 'image/jpeg' });
         const url = URL.createObjectURL(blob);
         setCapturedFile(file);
         setCapturedPreviewUrl(url);
+      } else {
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+        fetch(dataUrl)
+          .then((r) => r.blob())
+          .then((b) => {
+            const file = new File([b], `scan_${Date.now()}.jpg`, { type: 'image/jpeg' });
+            setCapturedFile(file);
+            setCapturedPreviewUrl(dataUrl);
+          })
+          .catch(() => {
+            setCapturedPreviewUrl(dataUrl);
+          });
       }
-    }, 'image/jpeg', 0.92);
+    };
+
+    try {
+      canvas.toBlob(onBlobReady, 'image/jpeg', 0.92);
+    } catch (_) {
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+      setCapturedPreviewUrl(dataUrl);
+    }
   };
 
   const handleFilePicked = (file: File) => {
@@ -254,7 +271,19 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
       </div>
 
       {/* Main Viewfinder Area */}
-      <div className="relative w-full max-w-md flex-1 my-4 flex items-center justify-center overflow-hidden rounded-2xl bg-slate-900 border border-white/10">
+      <div
+        className="relative w-full max-w-md flex-1 my-4 flex items-center justify-center overflow-hidden rounded-2xl bg-slate-900 border border-white/10 cursor-pointer"
+        onClick={() => {
+          if (!capturedPreviewUrl && hasPermission) {
+            handleCapture();
+          }
+        }}
+      >
+        {/* Flash Effect on Snapshot */}
+        {isFlashing && (
+          <div className="absolute inset-0 bg-white z-50 pointer-events-none transition-opacity duration-150" />
+        )}
+
         {capturedPreviewUrl ? (
           <div className="relative w-full h-full flex flex-col items-center justify-center bg-black/80 p-2">
             <img
@@ -343,16 +372,16 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
                 <div className="flex flex-col items-center gap-1">
                   {distanceStatus === 'optimal' ? (
                     <div className="bg-emerald-600/95 text-white px-3.5 py-1 rounded-full text-xs font-bold shadow-lg shadow-emerald-600/40 border border-emerald-300 flex items-center gap-1.5 animate-pulse">
-                      <span className="w-2 h-2 rounded-full bg-white" />
-                      <span>✓ Ideal Distance — Hold Steady</span>
+                      <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                      <span>✓ Ideal Distance — Tap to Scan</span>
                     </div>
                   ) : distanceStatus === 'too_far' ? (
                     <div className="bg-amber-600/95 text-white px-3.5 py-1 rounded-full text-xs font-bold shadow-lg shadow-amber-600/40 border border-amber-300 flex items-center gap-1.5">
-                      <span>🔍 Too Far — Move Phone Closer</span>
+                      <span>🔍 Move Phone Closer</span>
                     </div>
                   ) : distanceStatus === 'too_close' ? (
                     <div className="bg-amber-600/95 text-white px-3.5 py-1 rounded-full text-xs font-bold shadow-lg shadow-amber-600/40 border border-amber-300 flex items-center gap-1.5">
-                      <span>↔ Too Close — Move Phone Back</span>
+                      <span>↔ Move Phone Slightly Back</span>
                     </div>
                   ) : distanceStatus === 'blurry' ? (
                     <div className="bg-amber-600/95 text-white px-3.5 py-1 rounded-full text-xs font-bold shadow-lg shadow-amber-600/40 border border-amber-300 flex items-center gap-1.5">
@@ -365,15 +394,16 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
                   )}
 
                   {/* 3-Point Proximity Bar */}
-                  <div className="w-36 bg-black/60 backdrop-blur-xs px-2 py-1 rounded-full border border-white/10 flex items-center justify-between text-[9px] font-semibold text-slate-300">
+                  <div className="w-40 bg-black/60 backdrop-blur-xs px-2.5 py-1 rounded-full border border-white/10 flex items-center justify-between text-[10px] font-semibold text-slate-300">
                     <span className={distanceStatus === 'too_far' ? 'text-amber-300 font-bold' : 'text-slate-500'}>
                       Far
                     </span>
-                    <span className={distanceStatus === 'optimal' ? 'text-emerald-300 font-bold' : 'text-slate-500'}>
+                    <span className={distanceStatus === 'optimal' ? 'text-emerald-300 font-bold flex items-center gap-1' : 'text-slate-500'}>
+                      {distanceStatus === 'optimal' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-ping" />}
                       ● Ideal
                     </span>
-                    <span className={distanceStatus === 'too_close' ? 'text-amber-300 font-bold' : 'text-slate-500'}>
-                      Close
+                    <span className={distanceStatus === 'optimal' ? 'text-emerald-400 font-semibold' : 'text-slate-500'}>
+                      Ready
                     </span>
                   </div>
                 </div>
@@ -464,22 +494,42 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
           </button>
 
           {/* Big Circular Capture Shutter Button with distance-reactive styling */}
-          <button
-            type="button"
-            onClick={handleCapture}
-            className={`w-18 h-18 rounded-full border-4 p-1 flex items-center justify-center transition-all cursor-pointer shadow-lg active:scale-95 ${
-              distanceStatus === 'optimal'
-                ? 'border-emerald-400 bg-emerald-500/30 ring-4 ring-emerald-500/40 shadow-emerald-500/40'
-                : 'border-white bg-white/20 hover:bg-white/40'
-            }`}
-            title="Capture Photo"
-          >
-            <div
-              className={`w-14 h-14 rounded-full transition-colors ${
-                distanceStatus === 'optimal' ? 'bg-emerald-300' : 'bg-white'
+          <div className="flex flex-col items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handleCapture}
+              className={`w-20 h-20 rounded-full border-4 p-1 flex items-center justify-center transition-all cursor-pointer shadow-xl active:scale-95 ${
+                distanceStatus === 'optimal'
+                  ? 'border-emerald-400 bg-emerald-500/30 ring-4 ring-emerald-500/40 shadow-emerald-500/40 scale-105'
+                  : 'border-white bg-white/20 hover:bg-white/40'
               }`}
-            />
-          </button>
+              title="Capture Photo"
+            >
+              <div
+                className={`w-15 h-15 rounded-full transition-colors flex items-center justify-center ${
+                  distanceStatus === 'optimal' ? 'bg-emerald-300' : 'bg-white'
+                }`}
+              >
+                <svg
+                  className={`w-7 h-7 ${distanceStatus === 'optimal' ? 'text-emerald-950' : 'text-slate-900'}`}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                >
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                  <circle cx="12" cy="13" r="4" />
+                </svg>
+              </div>
+            </button>
+            <span
+              className={`text-[10px] font-bold tracking-wider uppercase ${
+                distanceStatus === 'optimal' ? 'text-emerald-400' : 'text-white/60'
+              }`}
+            >
+              {distanceStatus === 'optimal' ? 'Tap to Capture' : 'Capture'}
+            </span>
+          </div>
 
           {/* Gallery / File Picker button */}
           <label className="p-3.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer" title="Pick from Gallery">
