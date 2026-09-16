@@ -182,7 +182,6 @@ export function ReportScreen({
   onEditExtracted,
 }: ReportScreenProps) {
   const [activeTab, setActiveTab] = useState<ReportTab>('overview');
-  const [shareToast, setShareToast] = useState(false);
   const [isFullImageModalOpen, setIsFullImageModalOpen] = useState(false);
 
   if (!scan) {
@@ -221,23 +220,6 @@ export function ReportScreen({
     );
   }
 
-  const handleShare = () => {
-    if (navigator.share) {
-      navigator.share({
-        title: `CompliScan Report - ${scan.productName}`,
-        text: `Compliance assessment for ${scan.productName} (${scan.statusLabel}): ${scan.explanation}`,
-        url: window.location.href,
-      }).catch(() => {
-        // User cancelled or unsupported
-      });
-    } else {
-      // Fallback: Copy link
-      navigator.clipboard.writeText(window.location.href);
-      setShareToast(true);
-      setTimeout(() => setShareToast(false), 2500);
-    }
-  };
-
   const handleDownload = () => {
     if (onDownloadReport) {
       onDownloadReport();
@@ -248,13 +230,6 @@ export function ReportScreen({
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6 animate-in fade-in duration-150">
-      {/* Toast Notification */}
-      {shareToast && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-lg animate-in fade-in slide-in-from-top-2">
-          Link copied to clipboard!
-        </div>
-      )}
-
       {/* Full Image Preview Modal */}
       {isFullImageModalOpen && (
         <div
@@ -322,22 +297,6 @@ export function ReportScreen({
           </button>
 
           <div className="flex items-center gap-3">
-            {/* Share */}
-            <button
-              type="button"
-              onClick={handleShare}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors cursor-pointer shadow-2xs"
-            >
-              <svg className="w-4 h-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="18" cy="5" r="3" />
-                <circle cx="6" cy="12" r="3" />
-                <circle cx="18" cy="19" r="3" />
-                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-              </svg>
-              <span>Share</span>
-            </button>
-
             {/* Download PDF */}
             <button
               type="button"
@@ -899,22 +858,6 @@ export function ReportScreen({
           </button>
 
           <div className="flex items-center gap-3">
-            {/* Share Button */}
-            <button
-              type="button"
-              onClick={handleShare}
-              className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-slate-700 hover:text-blue-600 transition-colors cursor-pointer"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="18" cy="5" r="3" />
-                <circle cx="6" cy="12" r="3" />
-                <circle cx="18" cy="19" r="3" />
-                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-              </svg>
-              <span>Share</span>
-            </button>
-
             {/* Download Button */}
             <button
               type="button"
