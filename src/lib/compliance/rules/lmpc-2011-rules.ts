@@ -697,15 +697,188 @@ export class Rule09PDPProminence implements IComplianceRule {
   readonly errorCode = 'UNVERIFIABLE_PDP_PLACEMENT';
   readonly explanationKey = 'RULE_UNVERIFIABLE_PDP';
 
-  evaluate(_context: RuleExecutionContext): RuleEvaluation {
-    // Under Section 14 & 52 of guidelines: Do NOT fake millimeter placement compliance from uncalibrated 2D photos
+  evaluate(context: RuleExecutionContext): RuleEvaluation {
+    const { measurementData, textSizeResult } = context;
+
+    // If AI text size & prominence inspection ran
+    if (textSizeResult) {
+      const areaCm2 = textSizeResult.pdpAreaCm2;
+      const reqHeight = textSizeResult.minRequiredHeightMm;
+      const allAspectsValid = textSizeResult.items.every((i) => i.aspectRatioValid !== false);
+
+      if (textSizeResult.overallCompliance === 'PASS' && allAspectsValid) {
+        return {
+          ruleId: this.id,
+          name: this.name,
+          status: 'PASS',
+          severity: 'INFO',
+          message: `Principal Display Panel area estimated at ${areaCm2} cm². Mandatory declarations are prominently displayed with compliant character aspect ratios and background contrast under Rule 9.`,
+          field: 'principalDisplayPanel',
+          extractedValue: `PDP Area: ${areaCm2} cm² (Min Height: ${reqHeight}mm)`,
+          confidence: textSizeResult.confidence,
+          legalReference: this.legalReference,
+          errorCode: this.errorCode,
+          explanationKey: 'RULE_COMPLIANT_PDP',
+          humanVerificationRequired: false,
+        };
+      }
+    }
+
+    // Tier 1: No measurement data provided
+    if (!measurementData) {
+      return {
+        ruleId: this.id,
+        name: this.name,
+        status: 'UNVERIFIABLE',
+        severity: 'WARNING',
+        message:
+          'Verification of absolute font height in millimeters and PDP area ratio requires calibrated dimensions. Flagged for human physical verification.',
+        field: 'principalDisplayPanel',
+        confidence: 0.5,
+        legalReference: this.legalReference,
+        errorCode: this.errorCode,
+        explanationKey: this.explanationKey,
+        humanVerificationRequired: true,
+      };
+    }
+
+    // Tier 2: Measurement attempted but quality was UNRELIABLE
+    if (measurementData.qualityGrade === 'UNRELIABLE') {
+      return {
+        ruleId: this.id,
+        name: this.name,
+        status: 'UNVERIFIABLE',
+        severity: 'WARNING',
+        message:
+          'Calibrated measurement was attempted, but technical image/perspective quality grade was UNRELIABLE. Physical inspection required.',
+        field: 'principalDisplayPanel',
+        confidence: 0.4,
+        legalReference: this.legalReference,
+        errorCode: 'MEASUREMENT_QUALITY_UNRELIABLE',
+        explanationKey: this.explanationKey,
+        humanVerificationRequired: true,
+      };
+    }
+
+    // Tier 3: Quality is LOW, ACCEPTABLE, or HIGH
+    const widthMm = measurementData.pdpContourWidthMm || measurementData.pdpBoundingWidthMm || 0;
+    const heightMm = measurementData.pdpContourHeightMm || measurementData.pdpBoundingHeightMm || 0;
+    const areaCm2 =
+      measurementData.pdpContourAreaMm2
+        ? measurementData.pdpContourAreaMm2 / 100
+        : measurementData.pdpBoundingAreaMm2
+        ? measurementData.pdpBoundingAreaMm2 / 100
+        : (widthMm * heightMm) / 100;
+
+    const reqHeightMm = getRequiredNumeralHeight(areaCm2);
+
+    return {
+      ruleId: this.id,
+      name: this.name,
+      status: 'WARNING',
+      severity: this.severity,
+      message: `Principal Display Panel estimated at ${areaCm2.toFixed(1)} cm² (${widthMm.toFixed(0)} × ${heightMm.toFixed(0)} mm, grade: ${measurementData.qualityGrade}). Under LMPC Schedule I, minimum required numeral height is ${reqHeightMm} mm. Actual font height verification requires physical inspection.`,
+      field: 'principalDisplayPanel',
+      extractedValue: `${areaCm2.toFixed(1)} cm² (Req Min Numeral: ${reqHeightMm}mm)`,
+      confidence: measurementData.qualityGrade === 'HIGH' ? 0.85 : 0.7,
+      legalReference: this.legalReference,
+      errorCode: this.errorCode,
+      explanationKey: this.explanationKey,
+      humanVerificationRequired: true,
+    };
+  }
+}
+
+/**
+ * LMPC-R10-NUM-01: Minimum Numeral Height Requirement per Schedule I
+ * Legal Metrology (Packaged Commodities) Rules, 2011 - Rule 10 & Schedule I
+ */
+export class Rule10NumeralHeightInfo implements IComplianceRule {
+  readonly id = 'LMPC-R10-NUM-01';
+  readonly name = 'Minimum Numeral Height Requirement';
+  readonly legalReference = 'Legal Metrology (Packaged Commodities) Rules, 2011 - Rule 10 & Schedule I';
+  readonly category = 'PLACEMENT';
+  readonly severity = 'WARNING';
+  readonly applicability = 'ALL_PACKAGED_COMMODITIES';
+  readonly ruleVersion = '2026.01';
+  readonly humanVerificationRequired = true;
+  readonly errorCode = 'UNVERIFIABLE_NUMERAL_HEIGHT';
+  readonly explanationKey = 'RULE_UNVERIFIABLE_NUMERAL_HEIGHT';
+
+  evaluate(context: RuleExecutionContext): RuleEvaluation {
+    const { measurementData, textSizeResult } = context;
+
+    // If AI Text Size Inspection pipeline evaluated numeral heights
+    if (textSizeResult) {
+      const netQtyItem = textSizeResult.items.find((i) => i.field === 'netQuantity');
+      const reqHeight = textSizeResult.minRequiredHeightMm;
+      const pdpArea = textSizeResult.pdpAreaCm2;
+
+      if (netQtyItem) {
+        if (netQtyItem.meetsLimit) {
+          return {
+            ruleId: this.id,
+            name: this.name,
+            status: 'PASS',
+            severity: 'INFO',
+            message: `Net quantity numeral height is ~${netQtyItem.measuredHeightMm} mm ('${netQtyItem.printedText}'), which COMPLIES with the statutory minimum requirement of ${reqHeight} mm for PDP area of ${pdpArea} cm² under LMPC 2011 Rule 10 & Schedule I.`,
+            field: 'numeralHeight',
+            extractedValue: `${netQtyItem.measuredHeightMm} mm (Min Req: ${reqHeight} mm)`,
+            confidence: textSizeResult.confidence,
+            legalReference: this.legalReference,
+            errorCode: this.errorCode,
+            explanationKey: 'RULE_COMPLIANT_NUMERAL_HEIGHT',
+            humanVerificationRequired: false,
+          };
+        } else {
+          return {
+            ruleId: this.id,
+            name: this.name,
+            status: 'FAIL',
+            severity: 'ERROR',
+            message: `NON-COMPLIANCE: Net quantity numeral height is ${netQtyItem.measuredHeightMm} mm ('${netQtyItem.printedText}'), which is DEFICIENT and below the statutory minimum of ${reqHeight} mm required for PDP area of ${pdpArea} cm² under LMPC 2011 Rule 10 & Schedule I.`,
+            field: 'numeralHeight',
+            extractedValue: `${netQtyItem.measuredHeightMm} mm (Min Req: ${reqHeight} mm)`,
+            confidence: textSizeResult.confidence,
+            legalReference: this.legalReference,
+            errorCode: 'ERR_DEFICIENT_NUMERAL_HEIGHT',
+            explanationKey: 'RULE_DEFICIENT_NUMERAL_HEIGHT',
+            humanVerificationRequired: false,
+          };
+        }
+      }
+    }
+
+    if (measurementData && measurementData.qualityGrade !== 'UNRELIABLE') {
+      const areaCm2 =
+        (measurementData.pdpBoundingAreaMm2 ||
+          (measurementData.pdpBoundingWidthMm || 0) * (measurementData.pdpBoundingHeightMm || 0)) / 100;
+      const reqHeightMm = getRequiredNumeralHeight(areaCm2);
+
+      return {
+        ruleId: this.id,
+        name: this.name,
+        status: 'UNVERIFIABLE',
+        severity: 'WARNING',
+        message: `Based on calibrated PDP area of ~${areaCm2.toFixed(1)} cm², statutory minimum numeral height is ${reqHeightMm} mm per Schedule I. Printed numeral height cannot be authoritatively measured from 2D photos and requires physical gauge verification.`,
+        field: 'numeralHeight',
+        extractedValue: `Required: ≥ ${reqHeightMm} mm`,
+        confidence: 0.8,
+        legalReference: this.legalReference,
+        errorCode: this.errorCode,
+        explanationKey: this.explanationKey,
+        humanVerificationRequired: true,
+      };
+    }
+
     return {
       ruleId: this.id,
       name: this.name,
       status: 'UNVERIFIABLE',
       severity: 'WARNING',
-      message: 'Verification of absolute font height in millimeters and PDP area ratio requires calibrated 3D dimensions. Flagged for human physical verification.',
-      field: 'principalDisplayPanel',
+      message:
+        'Printed numeral and letter heights cannot be measured from an uncalibrated 2D photograph. Requires calibrated physical measurement with a scale/gauge.',
+      field: 'numeralHeight',
       confidence: 0.5,
       legalReference: this.legalReference,
       errorCode: this.errorCode,
@@ -713,6 +886,17 @@ export class Rule09PDPProminence implements IComplianceRule {
       humanVerificationRequired: true,
     };
   }
+}
+
+/**
+ * Calculates statutory minimum numeral height based on PDP Area per LMPC 2011 Schedule I
+ */
+function getRequiredNumeralHeight(areaCm2: number): number {
+  if (areaCm2 <= 50) return 1.0;
+  if (areaCm2 <= 100) return 1.5;
+  if (areaCm2 <= 500) return 2.0;
+  if (areaCm2 <= 2500) return 4.0;
+  return 6.0;
 }
 
 /**

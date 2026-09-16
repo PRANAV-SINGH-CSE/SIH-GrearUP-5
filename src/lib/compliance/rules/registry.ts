@@ -10,6 +10,7 @@ import {
   Rule06ConsumerCare,
   Rule06UnitSalePrice,
   Rule09PDPProminence,
+  Rule10NumeralHeightInfo,
   Rule06FoodExpiry,
 } from './lmpc-2011-rules';
 
@@ -28,6 +29,7 @@ export class RuleRegistry {
     this.registerRule(new Rule06ConsumerCare());
     this.registerRule(new Rule06UnitSalePrice());
     this.registerRule(new Rule09PDPProminence());
+    this.registerRule(new Rule10NumeralHeightInfo());
     this.registerRule(new Rule06FoodExpiry());
   }
 

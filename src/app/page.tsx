@@ -13,11 +13,13 @@ import { CameraModal } from '@/components/camera-modal';
 import { GuidelinesModal } from '@/components/guidelines-modal';
 import { AuthModal } from '@/components/auth-modal';
 import { ScanLoadingModal } from '@/components/scan-loading-modal';
+import { MeasurementModal } from '@/components/measurement-modal';
 import { FirebaseAuthService } from '@/lib/firebase/auth.service';
 import { FirebaseService } from '@/lib/firebase/firebase.service';
 import { AuthCacheService } from '@/lib/auth/auth-cache.service';
 import { AppScanItem, RuleCheckItem } from '@/lib/mock-scans';
 import { compressImageForUpload } from '@/lib/utils/client-image';
+import { MeasurementMetadata } from '@/lib/compliance/rules/rule.interface';
 
 type Language = 'en' | 'hi' | 'mr' | 'ta' | 'gu';
 type ThemePreference = 'light' | 'dark' | 'system';
@@ -96,6 +98,11 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isScanMinimized, setIsScanMinimized] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Measurement Modal State
+  const [isMeasurementOpen, setIsMeasurementOpen] = useState(false);
+  const [measurementImageFile, setMeasurementImageFile] = useState<File | null>(null);
+  const [pendingMeasurementData, setPendingMeasurementData] = useState<MeasurementMetadata | null>(null);
 
   // Authentication State with instant mobile cache hydration
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -264,7 +271,7 @@ export default function Home() {
   };
 
   // Handle image capture from live camera or file input
-  const handleProcessScanFile = async (rawFile: File) => {
+  const handleProcessScanFile = async (rawFile: File, measurementData?: MeasurementMetadata) => {
     setIsProcessing(true);
     setIsScanMinimized(false);
     setErrorMessage(null);
@@ -279,6 +286,11 @@ export default function Home() {
       if (currentUser?.uid) {
         formData.append('userId', currentUser.uid);
         formData.append('userEmail', currentUser.email || '');
+      }
+
+      const effMeasurement = measurementData || pendingMeasurementData;
+      if (effMeasurement) {
+        formData.append('measurementData', JSON.stringify(effMeasurement));
       }
 
       const res = await fetch('/api/scans', {
@@ -690,6 +702,22 @@ export default function Home() {
         isOpen={isCameraOpen}
         onClose={() => setIsCameraOpen(false)}
         onCapture={handleProcessScanFile}
+        onMeasure={(file) => {
+          setMeasurementImageFile(file);
+          setIsMeasurementOpen(true);
+        }}
+      />
+
+      <MeasurementModal
+        isOpen={isMeasurementOpen}
+        onClose={() => setIsMeasurementOpen(false)}
+        imageFile={measurementImageFile}
+        onComplete={(metadata) => {
+          setPendingMeasurementData(metadata);
+          if (measurementImageFile) {
+            handleProcessScanFile(measurementImageFile, metadata);
+          }
+        }}
       />
 
       <GuidelinesModal

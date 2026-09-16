@@ -4,6 +4,8 @@ import { IStorageProvider } from '../storage/storage.interface';
 import { IOCRProvider } from '../ocr/ocr.interface';
 import { ExtractionService } from '../extraction/extraction.service';
 import { ComplianceEngine } from '../compliance/engine';
+import { MeasurementMetadata } from '../compliance/rules/rule.interface';
+import { AITextSizeInspectionService } from '../compliance/text-size/text-size-inspection.service';
 import { ImageQualityService } from '../image/quality.service';
 import { ImagePreprocessorService } from '../image/preprocessor.service';
 import { ReportService } from '../reports/report.service';
@@ -20,6 +22,8 @@ export interface ScanPipelineOptions {
   scenarioId?: string;
   userId?: string;
   userEmail?: string;
+  /** Optional calibrated client-side physical measurement metadata */
+  measurementData?: MeasurementMetadata;
 }
 
 export class CompliScanPipeline {
@@ -30,7 +34,8 @@ export class CompliScanPipeline {
     private extractionService: ExtractionService,
     private complianceEngine: ComplianceEngine = new ComplianceEngine(),
     private qualityService: ImageQualityService = new ImageQualityService(),
-    private preprocessor: ImagePreprocessorService = new ImagePreprocessorService()
+    private preprocessor: ImagePreprocessorService = new ImagePreprocessorService(),
+    private textSizeService: AITextSizeInspectionService = new AITextSizeInspectionService()
   ) {}
 
   /**
@@ -204,6 +209,21 @@ export class CompliScanPipeline {
       );
       await this.repository.saveExtraction(scanId, extraction);
 
+      // 7.5 AI Text Size & Font Height Inspection per LMPC Rule 10 & Schedule I
+      let textSizeResult;
+      try {
+        textSizeResult = await this.textSizeService.inspectTextSize({
+          imageBuffer,
+          mimeType,
+          ocrResult,
+          product: extraction,
+          measurementData: options.measurementData,
+          category,
+        });
+      } catch (tsErr) {
+        Logger.warn('Text size inspection non-fatal error:', { scanId, error: String(tsErr) });
+      }
+
       // 8. Deterministic Compliance Rule Engine
       await this.repository.updateScanStatus(scanId, 'VALIDATING_COMPLIANCE');
       const compliance = this.complianceEngine.evaluate({
@@ -213,6 +233,8 @@ export class CompliScanPipeline {
         rulesetVersion,
         ocrResult,
         imageQualityScore: quality.score,
+        measurementData: options.measurementData,
+        textSizeResult,
       });
 
       await this.repository.saveComplianceEvaluation(

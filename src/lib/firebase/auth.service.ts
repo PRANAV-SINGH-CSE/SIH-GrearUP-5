@@ -7,16 +7,15 @@ import {
   User,
   GoogleAuthProvider,
   signInWithPopup,
+  browserPopupRedirectResolver,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   sendEmailVerification,
   signOut,
   updateProfile,
   onAuthStateChanged,
-  initializeAuth,
   indexedDBLocalPersistence,
   browserLocalPersistence,
-  setPersistence,
 } from 'firebase/auth';
 import { firebaseConfig } from './firebase.service';
 import { AuthCacheService } from '@/lib/auth/auth-cache.service';
@@ -38,16 +37,7 @@ export function getFirebaseAuth(): Auth {
   }
   if (!authInstance) {
     const app = getClientFirebaseApp();
-    try {
-      authInstance = initializeAuth(app, {
-        persistence: [indexedDBLocalPersistence, browserLocalPersistence],
-      });
-    } catch {
-      authInstance = getAuth(app);
-      setPersistence(authInstance, browserLocalPersistence).catch((err) => {
-        console.warn('Firebase setPersistence error:', err);
-      });
-    }
+    authInstance = getAuth(app);
   }
   return authInstance;
 }
@@ -71,7 +61,7 @@ export class FirebaseAuthService {
     provider.setCustomParameters({
       prompt: 'select_account',
     });
-    const cred = await signInWithPopup(auth, provider);
+    const cred = await signInWithPopup(auth, provider, browserPopupRedirectResolver);
     AuthCacheService.saveUser(cred.user);
     return cred.user;
   }

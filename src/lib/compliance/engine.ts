@@ -1,6 +1,7 @@
 import { RuleRegistry } from './rules/registry';
 import { ComplianceAggregator } from './aggregator';
-import { RuleExecutionContext } from './rules/rule.interface';
+import { RuleExecutionContext, MeasurementMetadata } from './rules/rule.interface';
+import { TextSizeInspectionResult } from './text-size/text-size.types';
 import { ComplianceEvaluationResult } from '../types/compliance';
 import { ProductDeclaration } from '../types/extraction';
 import { OCRResult } from '../types/ocr';
@@ -12,6 +13,10 @@ export interface EvaluateComplianceInput {
   rulesetVersion?: string;
   ocrResult?: OCRResult;
   imageQualityScore?: number;
+  /** Optional physical measurement data from calibrated client-side CV */
+  measurementData?: MeasurementMetadata;
+  /** Optional AI text size & font height inspection result */
+  textSizeResult?: TextSizeInspectionResult;
 }
 
 export class ComplianceEngine {
@@ -27,6 +32,8 @@ export class ComplianceEngine {
       rulesetVersion = 'LMPC-2011.v2026',
       ocrResult,
       imageQualityScore,
+      measurementData,
+      textSizeResult,
     } = input;
 
     const context: RuleExecutionContext = {
@@ -35,6 +42,8 @@ export class ComplianceEngine {
       rulesetVersion,
       ocrResult,
       imageQualityScore,
+      measurementData,
+      textSizeResult,
     };
 
     // 1. Fetch applicable rules for category
