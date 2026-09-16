@@ -1,4 +1,4 @@
-import { IAIExtractionProvider } from './extraction.interface';
+import { IAIExtractionProvider, MultiImageItem } from './extraction.interface';
 import { ProductDeclaration, ProductDeclarationSchema } from '../types/extraction';
 import { OCRResult } from '../types/ocr';
 import { DeterministicExtractor } from './deterministic.extractor';
@@ -11,7 +11,8 @@ export class GeminiAIExtractionProvider implements IAIExtractionProvider {
     ocrResult: OCRResult,
     categoryHint?: string,
     imageBuffer?: Buffer,
-    mimeType?: string
+    mimeType?: string,
+    additionalImages?: MultiImageItem[]
   ): Promise<ProductDeclaration> {
     const systemInstructions = `You are an expert Legal Metrology verification perception auditor for Indian packaged commodities under the Legal Metrology (Packaged Commodities) Rules, 2011.
 
@@ -83,8 +84,9 @@ Return ONLY valid JSON with this exact schema:
       return await executeWithGeminiFailover(async (ai) => {
         const parts: any[] = [];
 
-        // Attach image if available
+        // Attach primary image (Panel 1: Front PDP)
         if (imageBuffer && imageBuffer.length > 0) {
+          parts.push({ text: 'Packaging Image 1 (Front Principal Display Panel):' });
           parts.push({
             inlineData: {
               data: imageBuffer.toString('base64'),
@@ -93,8 +95,24 @@ Return ONLY valid JSON with this exact schema:
           });
         }
 
+        // Attach additional images (up to 2 more, e.g. Back Panel, Side/MRP Panel)
+        if (additionalImages && additionalImages.length > 0) {
+          additionalImages.slice(0, 2).forEach((img, idx) => {
+            if (img.buffer && img.buffer.length > 0) {
+              const label = img.label || (idx === 0 ? 'Back / Information Panel' : 'Side / MRP & Dates Panel');
+              parts.push({ text: `Packaging Image ${idx + 2} (${label}):` });
+              parts.push({
+                inlineData: {
+                  data: img.buffer.toString('base64'),
+                  mimeType: img.mimeType || 'image/jpeg',
+                },
+              });
+            }
+          });
+        }
+
         parts.push({
-          text: `${systemInstructions}\n\nHere is the initial OCR transcript from the image:\n---\n${ocrResult.fullText || '(No OCR text found)'}\n---\nPlease verify OCR against the image, correct any discrepancies, and extract the full statutory declarations in valid JSON.`,
+          text: `${systemInstructions}\n\nHere is the initial OCR transcript from the package image(s):\n---\n${ocrResult.fullText || '(No OCR text found)'}\n---\nPlease cross-examine the image(s) across all visible panels, verify OCR against the physical labels, correct any discrepancies, and extract the full statutory declarations in valid JSON.`,
         });
 
         let response;

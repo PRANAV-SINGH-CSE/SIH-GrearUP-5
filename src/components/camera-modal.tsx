@@ -5,9 +5,21 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 export interface CameraModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCapture: (file: File) => void;
-  onMeasure?: (file: File) => void;
+  onCapture: (primaryFile: File, additionalFiles?: File[]) => void;
+  onMeasure?: (primaryFile: File, additionalFiles?: File[]) => void;
 }
+
+export interface CapturedPanelSlot {
+  file: File;
+  previewUrl: string;
+  label: string;
+}
+
+export const DEFAULT_PANEL_LABELS = [
+  'Front PDP (Brand & Qty)',
+  'Back Panel (Mfg & Specs)',
+  'Side / MRP & Dates',
+];
 
 export type DistanceStatus = 'too_far' | 'too_close' | 'optimal' | 'blurry' | 'searching';
 
@@ -87,8 +99,8 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [capturedFile, setCapturedFile] = useState<File | null>(null);
-  const [capturedPreviewUrl, setCapturedPreviewUrl] = useState<string | null>(null);
+  const [slots, setSlots] = useState<CapturedPanelSlot[]>([]);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [activeCameraLabel, setActiveCameraLabel] = useState<string>('1x Main Lens');
   const [currentZoom, setCurrentZoom] = useState<number>(1.0);
   const [supportedZoom, setSupportedZoom] = useState<{ min: number; max: number } | null>(null);
@@ -222,8 +234,8 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
 
   useEffect(() => {
     if (isOpen) {
-      setCapturedFile(null);
-      setCapturedPreviewUrl(null);
+      setSlots([]);
+      setPreviewIndex(null);
       setIsSubmitting(false);
       setDistanceStatus('optimal');
       lastDistanceStatusRef.current = 'optimal';
@@ -235,11 +247,13 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
         stream.getTracks().forEach((track) => track.stop());
         setStream(null);
       }
-      if (capturedPreviewUrl) {
-        URL.revokeObjectURL(capturedPreviewUrl);
-        setCapturedPreviewUrl(null);
-      }
-      setCapturedFile(null);
+      setSlots((prev) => {
+        prev.forEach((s) => {
+          if (s.previewUrl) URL.revokeObjectURL(s.previewUrl);
+        });
+        return [];
+      });
+      setPreviewIndex(null);
       setIsSubmitting(false);
       setDistanceStatus('searching');
       lastDistanceStatusRef.current = 'searching';
@@ -254,7 +268,7 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
 
   // Real-time dynamic distance & sharpness analyzer (runs every 120ms with tolerant AI auto-approximation)
   useEffect(() => {
-    if (!isOpen || capturedFile || !hasPermission) return;
+    if (!isOpen || previewIndex !== null || !hasPermission) return;
 
     if (!analysisCanvasRef.current) {
       const c = document.createElement('canvas');
@@ -397,10 +411,12 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
     }, 120);
 
     return () => clearInterval(intervalId);
-  }, [isOpen, capturedFile, hasPermission]);
+  }, [isOpen, previewIndex, hasPermission]);
 
   const handleCapture = () => {
     if (!videoRef.current || !canvasRef.current) return;
+    if (slots.length >= 3) return;
+
     const video = videoRef.current;
     const canvas = canvasRef.current;
     canvas.width = video.videoWidth || 1280;
@@ -420,23 +436,28 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
     const onBlobReady = (blob: Blob | null) => {
+      const idx = slots.length;
+      const label = DEFAULT_PANEL_LABELS[idx] || `Panel ${idx + 1}`;
+
       if (blob) {
-        const file = new File([blob], `scan_${Date.now()}.jpg`, { type: 'image/jpeg' });
+        const file = new File([blob], `scan_panel_${idx + 1}_${Date.now()}.jpg`, { type: 'image/jpeg' });
         const url = URL.createObjectURL(blob);
-        setCapturedFile(file);
-        setCapturedPreviewUrl(url);
+        const newSlot: CapturedPanelSlot = { file, previewUrl: url, label };
+        const updated = [...slots, newSlot];
+        setSlots(updated);
+        setPreviewIndex(updated.length - 1);
       } else {
         const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
         fetch(dataUrl)
           .then((r) => r.blob())
           .then((b) => {
-            const file = new File([b], `scan_${Date.now()}.jpg`, { type: 'image/jpeg' });
-            setCapturedFile(file);
-            setCapturedPreviewUrl(dataUrl);
+            const file = new File([b], `scan_panel_${idx + 1}_${Date.now()}.jpg`, { type: 'image/jpeg' });
+            const newSlot: CapturedPanelSlot = { file, previewUrl: dataUrl, label };
+            const updated = [...slots, newSlot];
+            setSlots(updated);
+            setPreviewIndex(updated.length - 1);
           })
-          .catch(() => {
-            setCapturedPreviewUrl(dataUrl);
-          });
+          .catch(() => {});
       }
     };
 
@@ -444,43 +465,81 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
       canvas.toBlob(onBlobReady, 'image/jpeg', 0.92);
     } catch (_) {
       const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-      setCapturedPreviewUrl(dataUrl);
+      const idx = slots.length;
+      const label = DEFAULT_PANEL_LABELS[idx] || `Panel ${idx + 1}`;
+      fetch(dataUrl)
+        .then((r) => r.blob())
+        .then((b) => {
+          const file = new File([b], `scan_panel_${idx + 1}_${Date.now()}.jpg`, { type: 'image/jpeg' });
+          const newSlot: CapturedPanelSlot = { file, previewUrl: dataUrl, label };
+          const updated = [...slots, newSlot];
+          setSlots(updated);
+          setPreviewIndex(updated.length - 1);
+        })
+        .catch(() => {});
     }
   };
 
-  const handleFilePicked = (file: File) => {
-    const url = URL.createObjectURL(file);
-    setCapturedFile(file);
-    setCapturedPreviewUrl(url);
+  const handleFilesPicked = (fileList: FileList | File[]) => {
+    const files = Array.from(fileList);
+    if (files.length === 0) return;
+    const remainingSlots = Math.max(0, 3 - slots.length);
+    const filesToAdd = files.slice(0, remainingSlots);
+
+    const newSlots: CapturedPanelSlot[] = filesToAdd.map((file, i) => {
+      const idx = slots.length + i;
+      return {
+        file,
+        previewUrl: URL.createObjectURL(file),
+        label: DEFAULT_PANEL_LABELS[idx] || `Panel ${idx + 1}`,
+      };
+    });
+
+    const updated = [...slots, ...newSlots];
+    setSlots(updated);
+    setPreviewIndex(updated.length - 1);
+  };
+
+  const handleRemoveSlot = (indexToRemove: number) => {
+    const target = slots[indexToRemove];
+    if (target?.previewUrl) {
+      URL.revokeObjectURL(target.previewUrl);
+    }
+    const remaining = slots.filter((_, i) => i !== indexToRemove);
+    const relabeled = remaining.map((s, i) => ({
+      ...s,
+      label: DEFAULT_PANEL_LABELS[i] || `Panel ${i + 1}`,
+    }));
+    setSlots(relabeled);
+    if (relabeled.length === 0) {
+      setPreviewIndex(null);
+    } else {
+      setPreviewIndex(Math.min(indexToRemove, relabeled.length - 1));
+    }
   };
 
   const handleConfirmDirectScan = () => {
-    if (capturedFile && !isSubmitting) {
+    if (slots.length > 0 && !isSubmitting) {
       setIsSubmitting(true);
-      onCapture(capturedFile);
+      const primary = slots[0].file;
+      const additional = slots.slice(1).map((s) => s.file);
+      onCapture(primary, additional.length > 0 ? additional : undefined);
       onClose();
     }
   };
 
   const handleConfirmMeasure = () => {
-    if (capturedFile && !isSubmitting) {
+    if (slots.length > 0 && !isSubmitting) {
       setIsSubmitting(true);
+      const primary = slots[0].file;
+      const additional = slots.slice(1).map((s) => s.file);
       if (onMeasure) {
-        onMeasure(capturedFile);
+        onMeasure(primary, additional.length > 0 ? additional : undefined);
       } else {
-        onCapture(capturedFile);
+        onCapture(primary, additional.length > 0 ? additional : undefined);
       }
       onClose();
     }
-  };
-
-  const handleRetake = () => {
-    if (capturedPreviewUrl) {
-      URL.revokeObjectURL(capturedPreviewUrl);
-      setCapturedPreviewUrl(null);
-    }
-    setCapturedFile(null);
-    startCamera();
   };
 
   const toggleFacingMode = () => {
@@ -495,7 +554,7 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
       <div className="w-full max-w-md flex items-center justify-between text-white z-10 pt-1 pb-1">
         <span className="text-sm font-semibold tracking-wide flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-          Align Product Label
+          Packaging Scanner (Up to 3 Angles)
         </span>
         <button
           type="button"
@@ -509,11 +568,62 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
         </button>
       </div>
 
+      {/* 3-Panel Multi-Capture Strip (Front PDP, Back Info, Side / MRP) */}
+      <div className="w-full max-w-md grid grid-cols-3 gap-2 px-1 py-1.5 z-10">
+        {[0, 1, 2].map((idx) => {
+          const slot = slots[idx];
+          const isCurrentPreview = previewIndex === idx;
+          const isLiveTarget = previewIndex === null && slots.length === idx;
+          const shortNames = ['1. Front PDP', '2. Back Panel', '3. Side / MRP'];
+
+          return (
+            <div
+              key={idx}
+              onClick={() => {
+                if (slot) {
+                  setPreviewIndex(idx);
+                } else if (slots.length === idx) {
+                  setPreviewIndex(null);
+                }
+              }}
+              className={`relative flex flex-col items-center justify-center py-1.5 px-2 rounded-xl border text-[11px] font-semibold transition-all cursor-pointer select-none ${
+                isCurrentPreview
+                  ? 'bg-emerald-600/30 border-emerald-400 text-white shadow-md shadow-emerald-500/20 ring-1 ring-emerald-400'
+                  : slot
+                  ? 'bg-slate-800/80 border-white/20 text-slate-200 hover:bg-slate-700/80'
+                  : isLiveTarget
+                  ? 'bg-blue-600/25 border-blue-400/80 text-blue-200 animate-pulse ring-1 ring-blue-400/50'
+                  : 'bg-black/40 border-white/10 text-white/40 cursor-default'
+              }`}
+            >
+              <div className="flex items-center gap-1 w-full justify-between">
+                <span className="truncate text-[10px] font-bold">
+                  {slot ? `✓ ${shortNames[idx]}` : isLiveTarget ? `● ${shortNames[idx]}` : shortNames[idx]}
+                </span>
+                {slot && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveSlot(idx);
+                    }}
+                    className="w-4 h-4 rounded-full bg-red-500/80 hover:bg-red-500 text-white flex items-center justify-center text-[10px] cursor-pointer"
+                    title={`Remove ${shortNames[idx]}`}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
       {/* Main Viewfinder Area */}
       <div
         className="relative w-full max-w-md flex-1 my-4 flex items-center justify-center overflow-hidden rounded-2xl bg-slate-900 border border-white/10 cursor-pointer"
         onClick={() => {
-          if (!capturedPreviewUrl && hasPermission) {
+          if (previewIndex === null && hasPermission && slots.length < 3) {
             handleCapture();
           }
         }}
@@ -523,16 +633,16 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
           <div className="absolute inset-0 bg-white z-50 pointer-events-none transition-opacity duration-150" />
         )}
 
-        {capturedPreviewUrl ? (
+        {previewIndex !== null && slots[previewIndex] ? (
           <div className="relative w-full h-full flex flex-col items-center justify-center bg-black/80 p-2">
             <img
-              src={capturedPreviewUrl}
-              alt="Captured product"
+              src={slots[previewIndex].previewUrl}
+              alt={slots[previewIndex].label}
               className="max-h-full max-w-full object-contain rounded-xl shadow-md"
             />
-            <div className="absolute top-3 left-3 bg-black/70 backdrop-blur-xs px-3 py-1 rounded-full text-xs font-semibold text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+            <div className="absolute top-3 left-3 bg-black/75 backdrop-blur-xs px-3 py-1 rounded-full text-xs font-semibold text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              Photo Captured
+              {slots[previewIndex].label}
             </div>
           </div>
         ) : hasPermission === false ? (
@@ -546,9 +656,10 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
             <p className="text-sm text-slate-300">{errorMessage}</p>
             <div>
               <label className="inline-block px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg cursor-pointer">
-                Select from Device Files
+                Select from Device Files (Up to 3)
                 <input
                   type="file"
+                  multiple
                   accept="image/jpeg,image/png,image/webp,image/*"
                   capture="environment"
                   tabIndex={-1}
@@ -565,9 +676,8 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
                     (e.target as HTMLInputElement).value = '';
                   }}
                   onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) {
-                      handleFilePicked(f);
+                    if (e.target.files) {
+                      handleFilesPicked(e.target.files);
                     }
                   }}
                 />
@@ -714,155 +824,188 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
       </div>
 
       {/* Bottom Shutter or Choice Action Bar */}
-      {capturedFile ? (
-        <div className="w-full max-w-md flex flex-col gap-2.5 pb-2 pt-2">
+      {previewIndex !== null && slots[previewIndex] ? (
+        <div className="w-full max-w-md flex flex-col gap-2.5 pb-2 pt-2 z-10">
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={handleRetake}
-              className="flex-1 py-3 px-4 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs transition-colors cursor-pointer text-center"
+              onClick={() => handleRemoveSlot(previewIndex)}
+              className="flex-1 py-3 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs transition-colors cursor-pointer text-center flex items-center justify-center gap-1"
             >
-              ↺ Retake
+              <span>↺ Retake Panel {previewIndex + 1}</span>
             </button>
+            {slots.length < 3 && (
+              <button
+                type="button"
+                onClick={() => setPreviewIndex(null)}
+                className="flex-1 py-3 px-3 rounded-xl bg-blue-600/80 hover:bg-blue-600 text-white font-bold text-xs shadow-md transition-all cursor-pointer text-center flex items-center justify-center gap-1.5"
+              >
+                <span>+ Add Panel {slots.length + 1}</span>
+                <span className="text-[10px] text-blue-200">({3 - slots.length} left)</span>
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleConfirmDirectScan}
               disabled={isSubmitting}
-              className="flex-1 py-3 px-4 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs shadow-md transition-all cursor-pointer text-center disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 py-3.5 px-3 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs shadow-md transition-all cursor-pointer text-center disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSubmitting ? 'Scanning...' : 'Direct Scan'}
+              {isSubmitting ? 'Scanning...' : `Direct Scan (${slots.length} ${slots.length === 1 ? 'Panel' : 'Panels'})`}
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmMeasure}
+              disabled={isSubmitting}
+              className="flex-1 py-3.5 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-blue-600/30 transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span>📏 Measure & Scan</span>
             </button>
           </div>
-          <button
-            type="button"
-            onClick={handleConfirmMeasure}
-            disabled={isSubmitting}
-            className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-blue-600/30 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <span>📏 Measure PDP & Scan</span>
-            <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-semibold">Recommended</span>
-          </button>
         </div>
       ) : (
-        <div className="w-full max-w-md flex items-center justify-around pb-2 pt-2">
-          {/* Flip Camera Button */}
-          <button
-            type="button"
-            onClick={toggleFacingMode}
-            className="p-3.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
-            title="Switch Camera"
-          >
-            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M20 10c0-4.418-3.582-8-8-8s-8 3.582-8 8c0 2.21 0.895 4.21 2.343 5.657L4 18h6v-6l-2.257 2.257C6.671 13.186 6 11.686 6 10c0-3.314 2.686-6 6-6s6 2.686 6 6c0 1.686-0.671 3.186-1.743 4.257L17.7 15.7A7.95 7.95 0 0 0 20 10z" />
-            </svg>
-          </button>
+        <div className="w-full max-w-md flex flex-col gap-2 pb-2 pt-1 z-10">
+          {slots.length > 0 && (
+            <div className="flex items-center justify-between px-3 py-1 bg-black/50 backdrop-blur-xs rounded-lg border border-white/10 text-xs">
+              <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                {slots.length} {slots.length === 1 ? 'panel' : 'panels'} captured
+              </span>
+              <button
+                type="button"
+                onClick={() => setPreviewIndex(0)}
+                className="text-blue-400 hover:text-blue-300 font-semibold cursor-pointer underline text-[11px]"
+              >
+                Review / Done ({slots.length}) →
+              </button>
+            </div>
+          )}
 
-          {/* Big Circular Capture Shutter Button with distance-reactive styling */}
-          <div className="flex flex-col items-center gap-1.5 relative">
-            {/* Quick 1x Main / 2x Zoom Selector */}
-            {facingMode === 'environment' && supportedZoom && supportedZoom.max > 1.2 && (
-              <div className="absolute -top-9 flex items-center gap-1 bg-black/80 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/20 shadow-md z-20">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    applyZoom(1.0);
-                  }}
-                  className={`px-2 py-0.5 text-[10px] rounded-full transition-all cursor-pointer font-black ${
-                    currentZoom <= 1.2
-                      ? 'bg-emerald-400 text-black shadow-xs'
-                      : 'text-white/70 hover:text-white'
-                  }`}
-                  title="Force 1x Main Camera"
-                >
-                  1x Main
-                </button>
-                {supportedZoom.max >= 2.0 && (
+          <div className="flex items-center justify-around">
+            {/* Flip Camera Button */}
+            <button
+              type="button"
+              onClick={toggleFacingMode}
+              className="p-3.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+              title="Switch Camera"
+            >
+              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20 10c0-4.418-3.582-8-8-8s-8 3.582-8 8c0 2.21 0.895 4.21 2.343 5.657L4 18h6v-6l-2.257 2.257C6.671 13.186 6 11.686 6 10c0-3.314 2.686-6 6-6s6 2.686 6 6c0 1.686-0.671 3.186-1.743 4.257L17.7 15.7A7.95 7.95 0 0 0 20 10z" />
+              </svg>
+            </button>
+
+            {/* Big Circular Capture Shutter Button with distance-reactive styling */}
+            <div className="flex flex-col items-center gap-1.5 relative">
+              {/* Quick 1x Main / 2x Zoom Selector */}
+              {facingMode === 'environment' && supportedZoom && supportedZoom.max > 1.2 && (
+                <div className="absolute -top-9 flex items-center gap-1 bg-black/80 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/20 shadow-md z-20">
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      applyZoom(2.0);
+                      applyZoom(1.0);
                     }}
-                    className={`px-2 py-0.5 text-[10px] rounded-full transition-all cursor-pointer font-bold ${
-                      currentZoom >= 1.8
+                    className={`px-2 py-0.5 text-[10px] rounded-full transition-all cursor-pointer font-black ${
+                      currentZoom <= 1.2
                         ? 'bg-emerald-400 text-black shadow-xs'
                         : 'text-white/70 hover:text-white'
                     }`}
-                    title="2x Zoom"
+                    title="Force 1x Main Camera"
                   >
-                    2x
+                    1x Main
                   </button>
-                )}
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={handleCapture}
-              className={`w-20 h-20 rounded-full border-4 p-1 flex items-center justify-center transition-all cursor-pointer shadow-xl active:scale-95 ${
-                distanceStatus === 'optimal'
-                  ? 'border-emerald-400 bg-emerald-500/30 ring-4 ring-emerald-500/40 shadow-emerald-500/40 scale-105'
-                  : 'border-white bg-white/20 hover:bg-white/40'
-              }`}
-              title="Capture Photo"
-            >
-              <div
-                className={`w-15 h-15 rounded-full transition-colors flex items-center justify-center ${
-                  distanceStatus === 'optimal' ? 'bg-emerald-300' : 'bg-white'
+                  {supportedZoom.max >= 2.0 && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        applyZoom(2.0);
+                      }}
+                      className={`px-2 py-0.5 text-[10px] rounded-full transition-all cursor-pointer font-bold ${
+                        currentZoom >= 1.8
+                          ? 'bg-emerald-400 text-black shadow-xs'
+                          : 'text-white/70 hover:text-white'
+                      }`}
+                      title="2x Zoom"
+                    >
+                      2x
+                    </button>
+                  )}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={handleCapture}
+                className={`w-20 h-20 rounded-full border-4 p-1 flex items-center justify-center transition-all cursor-pointer shadow-xl active:scale-95 ${
+                  distanceStatus === 'optimal'
+                    ? 'border-emerald-400 bg-emerald-500/30 ring-4 ring-emerald-500/40 shadow-emerald-500/40 scale-105'
+                    : 'border-white bg-white/20 hover:bg-white/40'
+                }`}
+                title="Capture Photo"
+              >
+                <div
+                  className={`w-15 h-15 rounded-full transition-colors flex items-center justify-center ${
+                    distanceStatus === 'optimal' ? 'bg-emerald-300' : 'bg-white'
+                  }`}
+                >
+                  <svg
+                    className={`w-7 h-7 ${distanceStatus === 'optimal' ? 'text-emerald-950' : 'text-slate-900'}`}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                  >
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                    <circle cx="12" cy="13" r="4" />
+                  </svg>
+                </div>
+              </button>
+              <span
+                className={`text-[10px] font-bold tracking-wider uppercase ${
+                  distanceStatus === 'optimal' ? 'text-emerald-400' : 'text-white/60'
                 }`}
               >
-                <svg
-                  className={`w-7 h-7 ${distanceStatus === 'optimal' ? 'text-emerald-950' : 'text-slate-900'}`}
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                >
-                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                  <circle cx="12" cy="13" r="4" />
-                </svg>
-              </div>
-            </button>
-            <span
-              className={`text-[10px] font-bold tracking-wider uppercase ${
-                distanceStatus === 'optimal' ? 'text-emerald-400' : 'text-white/60'
-              }`}
-            >
-              {distanceStatus === 'optimal' ? 'Tap to Capture' : 'Capture'}
-            </span>
-          </div>
+                {slots.length === 0
+                  ? 'Capture Front PDP'
+                  : slots.length === 1
+                  ? 'Capture Back (2/3)'
+                  : 'Capture Side (3/3)'}
+              </span>
+            </div>
 
-          {/* Gallery / File Picker button */}
-          <label className="p-3.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer" title="Pick from Gallery">
-            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <polyline points="21 15 16 10 5 21" />
-            </svg>
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/*"
-              tabIndex={-1}
-              style={{
-                position: 'fixed',
-                top: '-9999px',
-                left: '-9999px',
-                opacity: 0,
-                width: '1px',
-                height: '1px',
-                pointerEvents: 'none',
-              }}
-              onClick={(e) => {
-                (e.target as HTMLInputElement).value = '';
-              }}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) {
-                  handleFilePicked(f);
-                }
-              }}
-            />
-          </label>
+            {/* Gallery / File Picker button */}
+            <label className="p-3.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer" title="Pick from Gallery">
+              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21 15 16 10 5 21" />
+              </svg>
+              <input
+                type="file"
+                multiple
+                accept="image/jpeg,image/png,image/webp,image/*"
+                tabIndex={-1}
+                style={{
+                  position: 'fixed',
+                  top: '-9999px',
+                  left: '-9999px',
+                  opacity: 0,
+                  width: '1px',
+                  height: '1px',
+                  pointerEvents: 'none',
+                }}
+                onClick={(e) => {
+                  (e.target as HTMLInputElement).value = '';
+                }}
+                onChange={(e) => {
+                  if (e.target.files) {
+                    handleFilesPicked(e.target.files);
+                  }
+                }}
+              />
+            </label>
+          </div>
         </div>
       )}
     </div>

@@ -16,18 +16,50 @@ export async function POST(request: NextRequest) {
     let userId: string | undefined;
     let userEmail: string | undefined;
     let measurementData: any = undefined;
+    const additionalImages: Array<{ buffer: Buffer; filename: string; mimeType: string; label?: string }> = [];
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData();
-      const file = formData.get('file') as File | null;
-      if (!file) {
+      const rawFileList: File[] = [];
+
+      // Read all files from 'files' or 'file' form fields (up to 3 images)
+      const filesParam = formData.getAll('files');
+      if (filesParam.length > 0) {
+        filesParam.forEach((item) => {
+          if (item instanceof File) rawFileList.push(item);
+        });
+      }
+      const fileParam = formData.getAll('file');
+      if (fileParam.length > 0) {
+        fileParam.forEach((item) => {
+          if (item instanceof File && !rawFileList.some((f) => f.name === item.name && f.size === item.size)) {
+            rawFileList.push(item);
+          }
+        });
+      }
+
+      if (rawFileList.length === 0) {
         throw new AppError('MISSING_FILE', 'No image file provided in form-data.', 400);
       }
 
-      const arrayBuffer = await file.arrayBuffer();
+      const primaryFile = rawFileList[0];
+      const arrayBuffer = await primaryFile.arrayBuffer();
       buffer = Buffer.from(arrayBuffer);
-      filename = file.name || 'upload.jpg';
-      mimeType = file.type || 'image/jpeg';
+      filename = primaryFile.name || 'upload_front.jpg';
+      mimeType = primaryFile.type || 'image/jpeg';
+
+      // Capture up to 2 additional images (e.g. Back Panel, Side/MRP Panel)
+      for (let i = 1; i < Math.min(3, rawFileList.length); i++) {
+        const extraFile = rawFileList[i];
+        const extraBuf = Buffer.from(await extraFile.arrayBuffer());
+        const label = i === 1 ? 'Back Information Panel' : 'Side / MRP & Dates Panel';
+        additionalImages.push({
+          buffer: extraBuf,
+          filename: extraFile.name || `panel_${i + 1}.jpg`,
+          mimeType: extraFile.type || 'image/jpeg',
+          label,
+        });
+      }
 
       if (formData.has('category')) {
         category = formData.get('category') as string;
@@ -59,15 +91,34 @@ export async function POST(request: NextRequest) {
       }
     } else if (contentType.includes('application/json')) {
       const json = await request.json();
-      if (!json.image) {
+      const rawImages: string[] = [];
+      if (Array.isArray(json.images) && json.images.length > 0) {
+        rawImages.push(...json.images);
+      } else if (json.image) {
+        rawImages.push(json.image);
+      }
+
+      if (rawImages.length === 0) {
         throw new AppError('MISSING_IMAGE', 'Base64 image string is required.', 400);
       }
 
       // Handle data URL prefix: data:image/png;base64,...
-      const base64Data = json.image.replace(/^data:image\/\w+;base64,/, '');
+      const base64Data = rawImages[0].replace(/^data:image\/\w+;base64,/, '');
       buffer = Buffer.from(base64Data, 'base64');
-      filename = json.filename || 'upload.jpg';
+      filename = json.filename || 'upload_front.jpg';
       mimeType = json.mimeType || 'image/jpeg';
+
+      for (let i = 1; i < Math.min(3, rawImages.length); i++) {
+        const extraBase64 = rawImages[i].replace(/^data:image\/\w+;base64,/, '');
+        const label = i === 1 ? 'Back Information Panel' : 'Side / MRP & Dates Panel';
+        additionalImages.push({
+          buffer: Buffer.from(extraBase64, 'base64'),
+          filename: `panel_${i + 1}.jpg`,
+          mimeType: json.mimeType || 'image/jpeg',
+          label,
+        });
+      }
+
       category = json.category || category;
       rulesetVersion = json.rulesetVersion || rulesetVersion;
       offlineClientId = json.offlineClientId;
@@ -94,6 +145,7 @@ export async function POST(request: NextRequest) {
       userId,
       userEmail,
       measurementData,
+      additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
     });
 
     return NextResponse.json(

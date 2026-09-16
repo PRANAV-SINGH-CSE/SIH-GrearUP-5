@@ -45,6 +45,7 @@ export const ScanDetailSchema = z.object({
   isOfflineSync: z.boolean().default(false),
   errorMessage: z.string().optional(),
   asset: UploadedAssetMetadataSchema.optional(),
+  additionalAssets: z.array(UploadedAssetMetadataSchema).optional(),
   ocrResult: OCRResultSchema.optional(),
   extraction: ProductDeclarationSchema.optional(),
   compliance: ComplianceEvaluationResultSchema.optional(),

@@ -14,6 +14,13 @@ import { ComplianceReport } from '../types/report';
 import { Logger } from '../utils/logger';
 import { AppError } from '../utils/errors';
 
+export interface AdditionalImageItem {
+  buffer: Buffer;
+  filename: string;
+  mimeType: string;
+  label?: string;
+}
+
 export interface ScanPipelineOptions {
   category?: string;
   rulesetVersion?: string;
@@ -24,6 +31,8 @@ export interface ScanPipelineOptions {
   userEmail?: string;
   /** Optional calibrated client-side physical measurement metadata */
   measurementData?: MeasurementMetadata;
+  /** Optional additional images of the same commodity (e.g. Back Panel, Side/MRP Panel, up to 2 extra) */
+  additionalImages?: AdditionalImageItem[];
 }
 
 export class CompliScanPipeline {
@@ -159,6 +168,31 @@ export class CompliScanPipeline {
         createdAt: new Date().toISOString(),
       });
 
+      // Save additional image assets if provided (up to 2 extra, max 3 total)
+      if (options.additionalImages && options.additionalImages.length > 0) {
+        for (let i = 0; i < Math.min(2, options.additionalImages.length); i++) {
+          const extra = options.additionalImages[i];
+          try {
+            const extraAsset = await this.storage.save(
+              extra.buffer,
+              extra.filename || `panel_${i + 2}_${filename}`,
+              extra.mimeType || 'image/jpeg'
+            );
+            await this.repository.saveAsset(scanId, {
+              id: extraAsset.hash,
+              scanId,
+              originalUrl: extraAsset.url,
+              mimeType: extra.mimeType || 'image/jpeg',
+              fileSize: extraAsset.fileSize,
+              hash: extraAsset.hash,
+              createdAt: new Date().toISOString(),
+            });
+          } catch (extraAssetErr) {
+            Logger.warn('Non-fatal: failed to store additional image asset', { scanId, error: String(extraAssetErr) });
+          }
+        }
+      }
+
       // 6. OCR Perception
       await this.repository.updateScanStatus(scanId, 'OCR_PROCESSING');
       const ocrStartTime = Date.now();
@@ -188,6 +222,33 @@ export class CompliScanPipeline {
         Logger.warn('OCR extraction failed', { scanId, error: String(ocrErr) });
         throw ocrErr;
       }
+
+      // If additional packaging images are present, run OCR perception on them and merge transcripts
+      if (options.additionalImages && options.additionalImages.length > 0) {
+        for (let i = 0; i < Math.min(2, options.additionalImages.length); i++) {
+          const extra = options.additionalImages[i];
+          try {
+            const extraPreprocessed = await this.preprocessor.preprocessImage(extra.buffer);
+            const extraOcr = await this.ocr.extractText(
+              extraPreprocessed.processedBuffer,
+              'image/png'
+            );
+            if (extraOcr && extraOcr.fullText) {
+              const panelLabel = extra.label || (i === 0 ? 'BACK / INFO PANEL' : 'SIDE / MRP & DATES PANEL');
+              ocrResult.fullText = `${ocrResult.fullText}\n\n=== [${panelLabel}] ===\n${extraOcr.fullText}`;
+              if (extraOcr.blocks && extraOcr.blocks.length > 0) {
+                ocrResult.blocks = [
+                  ...ocrResult.blocks,
+                  ...extraOcr.blocks,
+                ];
+              }
+            }
+          } catch (extraOcrErr) {
+            Logger.warn('Non-fatal additional image OCR failed', { scanId, error: String(extraOcrErr) });
+          }
+        }
+      }
+
       ocrResult.durationMs = Date.now() - ocrStartTime;
       await this.repository.saveOCRResult(scanId, ocrResult);
 
@@ -196,16 +257,18 @@ export class CompliScanPipeline {
         confidence: ocrResult.confidence,
         provider: ocrResult.provider,
         durationMs: ocrResult.durationMs,
+        totalPanels: 1 + (options.additionalImages?.length || 0),
       });
 
-      // 7. Declaration Extraction (Deterministic Normalizers + AI)
-      // If OCR was poor or failed, direct image buffer is passed as fallback
+      // 7. Declaration Extraction (Deterministic Normalizers + AI across all panels)
+      // All up to 3 image buffers are provided to the AI for holistic multimodal extraction
       await this.repository.updateScanStatus(scanId, 'EXTRACTING');
       const extraction = await this.extractionService.extractDeclarations(
         ocrResult,
         category,
         imageBuffer,
-        mimeType
+        mimeType,
+        options.additionalImages
       );
       await this.repository.saveExtraction(scanId, extraction);
 

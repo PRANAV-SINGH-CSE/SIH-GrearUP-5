@@ -6,7 +6,7 @@ import { NavTabId } from '../bottom-nav';
 
 export interface HomeScreenProps {
   onOpenScanningCamera: () => void;
-  onImageFileSelected: (file: File) => void;
+  onImageFileSelected: (primaryFile: File, additionalFiles?: File[]) => void;
   onNavigateTab: (tab: NavTabId) => void;
   onOpenGuidelinesModal: () => void;
   onShowLoadingModal?: () => void;
@@ -36,19 +36,25 @@ export function HomeScreen({
   };
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      onImageFileSelected(file);
+    const fileList = e.target.files;
+    if (fileList && fileList.length > 0) {
+      const selected = Array.from(fileList).slice(0, 3);
+      if (selected.length === 1) {
+        onImageFileSelected(selected[0]);
+      } else {
+        onImageFileSelected(selected[0], selected.slice(1));
+      }
     }
   };
 
   return (
     <>
-      {/* Offscreen file input - reliably accessible across all Android WebViews and mobile browsers */}
+      {/* Offscreen file input - supports selecting up to 3 packaging images */}
       <input
         id="global-product-image-upload"
         ref={fileInputRef}
         type="file"
+        multiple
         accept="image/jpeg,image/png,image/webp,image/*"
         tabIndex={-1}
         style={{

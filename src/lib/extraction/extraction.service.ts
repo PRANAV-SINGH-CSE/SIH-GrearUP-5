@@ -41,11 +41,12 @@ export class ExtractionService {
     ocrResult: OCRResult,
     categoryHint?: string,
     imageBuffer?: Buffer,
-    mimeType?: string
+    mimeType?: string,
+    additionalImages?: { buffer: Buffer; mimeType?: string; label?: string }[]
   ): Promise<ProductDeclaration> {
     if (this.aiProvider.name === 'nova') {
       try {
-        return await this.aiProvider.extractDeclarations(ocrResult, categoryHint, imageBuffer, mimeType);
+        return await this.aiProvider.extractDeclarations(ocrResult, categoryHint, imageBuffer, mimeType, additionalImages);
       } catch (err) {
         console.warn('Nova extraction failed, falling back to Deterministic:', err);
         return DeterministicExtractor.extract(ocrResult);
@@ -54,7 +55,7 @@ export class ExtractionService {
 
     if (this.aiProvider.name === 'gemini') {
       try {
-        return await this.aiProvider.extractDeclarations(ocrResult, categoryHint, imageBuffer, mimeType);
+        return await this.aiProvider.extractDeclarations(ocrResult, categoryHint, imageBuffer, mimeType, additionalImages);
       } catch (err) {
         console.warn('Gemini extraction failed, falling back to deterministic extractor:', err);
         return DeterministicExtractor.extract(ocrResult);

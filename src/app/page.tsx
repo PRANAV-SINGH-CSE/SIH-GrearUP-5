@@ -102,6 +102,7 @@ export default function Home() {
   // Measurement Modal State
   const [isMeasurementOpen, setIsMeasurementOpen] = useState(false);
   const [measurementImageFile, setMeasurementImageFile] = useState<File | null>(null);
+  const [additionalMeasurementFiles, setAdditionalMeasurementFiles] = useState<File[]>([]);
   const [pendingMeasurementData, setPendingMeasurementData] = useState<MeasurementMetadata | null>(null);
 
   // Authentication State with instant mobile cache hydration
@@ -272,8 +273,12 @@ export default function Home() {
 
   const isProcessingScanRef = useRef(false);
 
-  // Handle image capture from live camera or file input
-  const handleProcessScanFile = async (rawFile: File, measurementData?: MeasurementMetadata) => {
+  // Handle image capture from live camera or file input (supports up to 3 packaging images)
+  const handleProcessScanFile = async (
+    rawFile: File | File[],
+    additionalFilesOrMeasurement?: File[] | MeasurementMetadata,
+    measurementData?: MeasurementMetadata
+  ) => {
     // Prevent duplicate concurrent requests (e.g. mobile double-tap or touch+click synthetic events)
     if (isProcessingScanRef.current) {
       console.warn('Scan processing already in flight, ignoring duplicate call');
@@ -284,11 +289,47 @@ export default function Home() {
     setIsScanMinimized(false);
     setErrorMessage(null);
 
+    // Normalize input files list
+    let fileList: File[] = [];
+    let effMeasurement: MeasurementMetadata | undefined = undefined;
+
+    if (Array.isArray(rawFile)) {
+      fileList = [...rawFile];
+      if (additionalFilesOrMeasurement && !Array.isArray(additionalFilesOrMeasurement)) {
+        effMeasurement = additionalFilesOrMeasurement;
+      }
+    } else if (rawFile) {
+      fileList = [rawFile];
+      if (Array.isArray(additionalFilesOrMeasurement)) {
+        fileList.push(...additionalFilesOrMeasurement);
+        effMeasurement = measurementData;
+      } else if (additionalFilesOrMeasurement) {
+        effMeasurement = additionalFilesOrMeasurement;
+      }
+    }
+
+    if (!effMeasurement) {
+      effMeasurement = pendingMeasurementData || undefined;
+    }
+
+    // Cap at 3 images maximum (e.g. Front PDP, Back Information, Side/MRP)
+    fileList = fileList.slice(0, 3);
+    const primaryFile = fileList[0];
+
     try {
-      // Compress image client-side to ensure ultra-fast uploads on mobile (< 1.5MB)
-      const file = await compressImageForUpload(rawFile);
       const formData = new FormData();
-      formData.append('file', file);
+
+      // Compress all packaging images client-side for fast mobile uploads
+      for (const f of fileList) {
+        const compressed = await compressImageForUpload(f);
+        formData.append('files', compressed);
+      }
+      // Append primary file for backward compatibility
+      if (fileList.length > 0) {
+        const primaryCompressed = await compressImageForUpload(fileList[0]);
+        formData.append('file', primaryCompressed);
+      }
+
       formData.append('category', 'GENERIC_PACKAGED_COMMODITY');
       formData.append('locale', currentLanguage === 'hi' ? 'hi' : 'en');
       if (currentUser?.uid) {
@@ -296,7 +337,6 @@ export default function Home() {
         formData.append('userEmail', currentUser.email || '');
       }
 
-      const effMeasurement = measurementData || pendingMeasurementData;
       if (effMeasurement) {
         formData.append('measurementData', JSON.stringify(effMeasurement));
       }
@@ -363,7 +403,7 @@ export default function Home() {
         apiReport.productInformation?.productName ||
         decl.productName?.value ||
         decl.genericName?.value ||
-        file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+        (primaryFile ? primaryFile.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') : 'Packaged Commodity');
 
       const detectedMfg =
         apiReport.productInformation?.manufacturerOrPacker ||
@@ -446,7 +486,7 @@ export default function Home() {
           batchNo: detectedBatch,
         },
         ruleChecks: ruleChecks,
-        imageUrl: URL.createObjectURL(file),
+        imageUrl: primaryFile ? URL.createObjectURL(primaryFile) : '',
         pdpApproximation: (apiReport as any).pdpApproximation || (apiScan as any).compliance?.pdpApproximation,
       };
 
@@ -711,9 +751,12 @@ export default function Home() {
       <CameraModal
         isOpen={isCameraOpen}
         onClose={() => setIsCameraOpen(false)}
-        onCapture={handleProcessScanFile}
-        onMeasure={(file) => {
-          setMeasurementImageFile(file);
+        onCapture={(primaryFile, additionalFiles) => {
+          handleProcessScanFile(primaryFile, additionalFiles);
+        }}
+        onMeasure={(primaryFile, additionalFiles) => {
+          setMeasurementImageFile(primaryFile);
+          setAdditionalMeasurementFiles(additionalFiles || []);
           setIsMeasurementOpen(true);
         }}
       />
@@ -725,7 +768,7 @@ export default function Home() {
         onComplete={(metadata) => {
           setPendingMeasurementData(metadata);
           if (measurementImageFile) {
-            handleProcessScanFile(measurementImageFile, metadata);
+            handleProcessScanFile(measurementImageFile, additionalMeasurementFiles, metadata);
           }
         }}
       />

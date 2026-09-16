@@ -1,4 +1,4 @@
-import { IAIExtractionProvider } from './extraction.interface';
+import { IAIExtractionProvider, MultiImageItem } from './extraction.interface';
 import { ProductDeclaration, ProductDeclarationSchema } from '../types/extraction';
 import { OCRResult } from '../types/ocr';
 import { DeterministicExtractor } from './deterministic.extractor';
@@ -11,7 +11,8 @@ export class NovaAIExtractionProvider implements IAIExtractionProvider {
     ocrResult: OCRResult,
     categoryHint?: string,
     imageBuffer?: Buffer,
-    mimeType?: string
+    mimeType?: string,
+    additionalImages?: MultiImageItem[]
   ): Promise<ProductDeclaration> {
     const client = getOpenAIClient();
     if (!client) {
@@ -71,7 +72,12 @@ Return ONLY valid JSON. Do not wrap in markdown code fences.`;
       | { type: 'image_url'; image_url: { url: string } }
     > = [];
 
+    // Attach primary image (Panel 1)
     if (imageBuffer && imageBuffer.length > 0) {
+      userContent.push({
+        type: 'text',
+        text: 'Packaging Image 1 (Front Principal Display Panel):',
+      });
       userContent.push({
         type: 'image_url',
         image_url: {
@@ -80,9 +86,28 @@ Return ONLY valid JSON. Do not wrap in markdown code fences.`;
       });
     }
 
+    // Attach additional images (up to 2 more, e.g. Back Panel, Side/MRP Panel)
+    if (additionalImages && additionalImages.length > 0) {
+      additionalImages.slice(0, 2).forEach((img, idx) => {
+        if (img.buffer && img.buffer.length > 0) {
+          const label = img.label || (idx === 0 ? 'Back / Information Panel' : 'Side / MRP & Dates Panel');
+          userContent.push({
+            type: 'text',
+            text: `Packaging Image ${idx + 2} (${label}):`,
+          });
+          userContent.push({
+            type: 'image_url',
+            image_url: {
+              url: `data:${img.mimeType || 'image/jpeg'};base64,${img.buffer.toString('base64')}`,
+            },
+          });
+        }
+      });
+    }
+
     userContent.push({
       type: 'text',
-      text: `Category Hint: ${categoryHint || 'GENERIC_PACKAGED_COMMODITY'}\n\nOCR Transcript:\n${ocrResult.fullText || '(No OCR text found)'}\n\nPlease inspect the image and OCR transcript, and extract the statutory declarations strictly in valid JSON.`,
+      text: `Category Hint: ${categoryHint || 'GENERIC_PACKAGED_COMMODITY'}\n\nOCR Transcript from all package faces:\n${ocrResult.fullText || '(No OCR text found)'}\n\nPlease cross-examine the image(s) across all visible panels, verify OCR against the physical labels, correct any discrepancies, and extract the full statutory declarations strictly in valid JSON.`,
     });
 
     try {
