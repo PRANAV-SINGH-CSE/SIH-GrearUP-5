@@ -103,7 +103,19 @@ export async function POST(request: NextRequest) {
       },
       { status: 201 }
     );
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.message && (error.message.includes('heif:') || error.message.includes('bad seek'))) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'IMAGE_DECODE_FAILED',
+            message: 'Camera image format could not be processed directly. Please retake the photo or select JPEG/PNG.',
+          },
+        },
+        { status: 400 }
+      );
+    }
     return handleApiError(error);
   }
 }

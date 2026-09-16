@@ -620,40 +620,55 @@ export function MeasurementModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/95 text-white flex flex-col items-center justify-between p-2 sm:p-4 overflow-hidden animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 bg-black/95 text-white flex flex-col items-center justify-between pt-[max(3rem,env(safe-area-inset-top,0px))] pb-[max(2.25rem,env(safe-area-inset-bottom,0px))] px-3 sm:px-6 overflow-hidden animate-in fade-in duration-200">
       {/* Top Header */}
-      <header className="w-full max-w-4xl flex items-center justify-between pb-3 border-b border-white/10">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold">
-            📏
+      <header className="w-full max-w-4xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-white/10">
+        <div className="flex items-center justify-between w-full sm:w-auto">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold text-sm">
+              📏
+            </div>
+            <div>
+              <h2 className="text-xs sm:text-base font-bold text-white flex items-center gap-1.5">
+                Physical Measurement
+                <span className="text-[9px] sm:text-[10px] font-semibold bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded-full border border-blue-500/30">
+                  LMPC Sch. I
+                </span>
+              </h2>
+              <p className="text-[11px] text-slate-400 hidden sm:block">
+                Calibrated reference dimension analysis with uncertainty estimation
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
-              Physical Measurement & Calibration
-              <span className="text-[10px] font-semibold bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full border border-blue-500/30">
-                LMPC Schedule I
-              </span>
-            </h2>
-            <p className="text-xs text-slate-400 hidden sm:block">
-              Calibrated reference dimension analysis with uncertainty estimation
-            </p>
-          </div>
-        </div>
 
-        {/* Step Indicator */}
-        <div className="flex items-center gap-1.5 text-xs">
-          <span className={`px-2 py-1 rounded-md ${currentStep === 'quality' ? 'bg-blue-600 font-bold' : 'bg-white/10 text-slate-400'}`}>1. Quality</span>
-          <span className="text-slate-600">→</span>
-          <span className={`px-2 py-1 rounded-md ${currentStep === 'reference' ? 'bg-blue-600 font-bold' : 'bg-white/10 text-slate-400'}`}>2. Reference</span>
-          <span className="text-slate-600">→</span>
-          <span className={`px-2 py-1 rounded-md ${currentStep === 'detection' ? 'bg-blue-600 font-bold' : 'bg-white/10 text-slate-400'}`}>3. Object</span>
-          <span className="text-slate-600">→</span>
-          <span className={`px-2 py-1 rounded-md ${currentStep === 'results' ? 'bg-blue-600 font-bold' : 'bg-white/10 text-slate-400'}`}>4. Results</span>
-
+          {/* Mobile-visible Close Button */}
           <button
             type="button"
             onClick={onClose}
-            className="ml-3 p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 transition-colors"
+            className="sm:hidden p-2 rounded-xl bg-white/10 hover:bg-white/20 text-slate-200 transition-colors"
+            title="Cancel"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Step Indicator */}
+        <div className="flex items-center justify-between sm:justify-end gap-1.5 text-[11px] sm:text-xs w-full sm:w-auto overflow-x-auto py-0.5">
+          <div className="flex items-center gap-1 sm:gap-1.5">
+            <span className={`px-2 py-0.5 sm:py-1 rounded-md ${currentStep === 'quality' ? 'bg-blue-600 font-bold text-white' : 'bg-white/10 text-slate-400'}`}>1. Quality</span>
+            <span className="text-slate-600 text-[10px]">→</span>
+            <span className={`px-2 py-0.5 sm:py-1 rounded-md ${currentStep === 'reference' ? 'bg-blue-600 font-bold text-white' : 'bg-white/10 text-slate-400'}`}>2. Reference</span>
+            <span className="text-slate-600 text-[10px]">→</span>
+            <span className={`px-2 py-0.5 sm:py-1 rounded-md ${currentStep === 'detection' ? 'bg-blue-600 font-bold text-white' : 'bg-white/10 text-slate-400'}`}>3. Object</span>
+            <span className="text-slate-600 text-[10px]">→</span>
+            <span className={`px-2 py-0.5 sm:py-1 rounded-md ${currentStep === 'results' ? 'bg-blue-600 font-bold text-white' : 'bg-white/10 text-slate-400'}`}>4. Results</span>
+          </div>
+
+          {/* Desktop-visible Close Button */}
+          <button
+            type="button"
+            onClick={onClose}
+            className="hidden sm:block ml-3 p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 transition-colors"
             title="Cancel"
           >
             ✕

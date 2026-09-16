@@ -112,30 +112,30 @@ export function ScanLoadingModal({ isOpen, onMinimize, isMinimized }: ScanLoadin
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-200/80 overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center pt-[max(3rem,env(safe-area-inset-top,0px)+0.75rem)] pb-[max(2.5rem,env(safe-area-inset-bottom,0px)+0.75rem)] px-3 sm:px-4 bg-slate-950/70 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
+      <div className="relative w-full max-w-lg my-auto bg-white rounded-3xl shadow-2xl border border-slate-200/80 overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 max-h-[calc(100dvh-max(6.5rem,env(safe-area-inset-top,0px)+env(safe-area-inset-bottom,0px)+1.5rem))]">
         {/* Ambient Top Glow */}
         <div className="absolute -top-24 -left-24 w-60 h-60 bg-blue-500/15 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -top-24 -right-24 w-60 h-60 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none" />
 
         {/* Modal Header */}
-        <div className="relative px-6 pt-6 pb-4 flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-blue-50/50 via-white to-indigo-50/50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
+        <div className="relative px-5 sm:px-6 pt-5 sm:pt-6 pb-3.5 sm:pb-4 flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-blue-50/50 via-white to-indigo-50/50 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0">
               <svg className="w-5 h-5 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                 <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z" />
                 <path d="M12 6v6l4 2" />
               </svg>
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-black text-slate-900">CompliScan AI Engine</h3>
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <h3 className="text-sm sm:text-base font-black text-slate-900">CompliScan AI Engine</h3>
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold">
                   <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-ping" />
                   Live
                 </span>
               </div>
-              <p className="text-xs text-slate-500 font-medium">
+              <p className="text-[11px] sm:text-xs text-slate-500 font-medium line-clamp-1">
                 Legal Metrology Compliance Audit in Progress
               </p>
             </div>
@@ -146,7 +146,7 @@ export function ScanLoadingModal({ isOpen, onMinimize, isMinimized }: ScanLoadin
             <button
               type="button"
               onClick={onMinimize}
-              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] sm:text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer shrink-0 ml-2"
               title="Keep running while browsing"
             >
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -157,8 +157,8 @@ export function ScanLoadingModal({ isOpen, onMinimize, isMinimized }: ScanLoadin
           )}
         </div>
 
-        {/* Modal Body */}
-        <div className="relative p-6 sm:p-7 flex flex-col items-center text-center">
+        {/* Modal Body - Scrollable */}
+        <div className="relative p-5 sm:p-7 flex flex-col items-center text-center overflow-y-auto">
           {/* Animated Scanner Visual Centerpiece */}
           <div className="relative my-2 w-32 h-32 flex items-center justify-center">
             {/* Outer Rotating Glowing Ring */}

@@ -11,8 +11,8 @@ export function GuidelinesModal({ isOpen, onClose }: GuidelinesModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
-      <div className="bg-white rounded-3xl max-w-lg w-full max-h-[85vh] flex flex-col shadow-2xl border border-slate-100 overflow-hidden">
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center pt-[max(3rem,env(safe-area-inset-top,0px)+0.75rem)] pb-[max(2.5rem,env(safe-area-inset-bottom,0px)+0.75rem)] px-4 animate-in fade-in duration-150 overflow-y-auto">
+      <div className="bg-white rounded-3xl max-w-lg w-full max-h-[calc(100dvh-max(6.5rem,env(safe-area-inset-top,0px)+env(safe-area-inset-bottom,0px)+1.5rem))] flex flex-col shadow-2xl border border-slate-100 overflow-hidden my-auto">
         {/* Header */}
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-2.5">

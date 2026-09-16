@@ -302,9 +302,9 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-between p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-between pt-[max(3rem,env(safe-area-inset-top,0px))] pb-[max(2.25rem,env(safe-area-inset-bottom,0px))] px-4 animate-in fade-in duration-200">
       {/* Top Controls Bar */}
-      <div className="w-full max-w-md flex items-center justify-between text-white z-10 pt-2">
+      <div className="w-full max-w-md flex items-center justify-between text-white z-10 pt-1 pb-1">
         <span className="text-sm font-semibold tracking-wide flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
           Align Product Label
@@ -523,7 +523,7 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
 
       {/* Bottom Shutter or Choice Action Bar */}
       {capturedFile ? (
-        <div className="w-full max-w-md flex flex-col gap-2.5 pb-6 pt-2">
+        <div className="w-full max-w-md flex flex-col gap-2.5 pb-2 pt-2">
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -550,7 +550,7 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
           </button>
         </div>
       ) : (
-        <div className="w-full max-w-md flex items-center justify-around pb-6 pt-2">
+        <div className="w-full max-w-md flex items-center justify-around pb-2 pt-2">
           {/* Flip Camera Button */}
           <button
             type="button"

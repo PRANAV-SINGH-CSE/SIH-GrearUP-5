@@ -147,8 +147,8 @@ export function AuthModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
-      <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 flex flex-col relative max-h-[92vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center pt-[max(3rem,env(safe-area-inset-top,0px)+0.75rem)] pb-[max(2.5rem,env(safe-area-inset-bottom,0px)+0.75rem)] px-4 animate-in fade-in duration-150 overflow-y-auto">
+      <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 flex flex-col relative max-h-[calc(100dvh-max(6.5rem,env(safe-area-inset-top,0px)+env(safe-area-inset-bottom,0px)+1.5rem))] overflow-y-auto my-auto">
         {/* Close Button */}
         <button
           type="button"
