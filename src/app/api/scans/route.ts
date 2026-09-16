@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getScanRepository } from '@/lib/repository/repository.factory';
 import { getCompliScanPipeline } from '@/lib/pipeline/pipeline.factory';
 import { handleApiError, AppError } from '@/lib/utils/errors';
+import { ReportService } from '@/lib/reports/report.service';
 
 export async function POST(request: NextRequest) {
   try {
@@ -176,6 +177,30 @@ export async function GET(request: NextRequest) {
   try {
     const repository = getScanRepository();
     const url = new URL(request.url);
+
+    const offlineClientId = url.searchParams.get('offlineClientId');
+    if (offlineClientId) {
+      const scan = await repository.findScanByOfflineClientId(offlineClientId);
+      if (!scan) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: { code: 'NOT_FOUND', message: 'Scan not found for offlineClientId' },
+          },
+          { status: 404 }
+        );
+      }
+      const locale = url.searchParams.get('locale') === 'hi' ? 'hi' : 'en';
+      const report = ReportService.generateReport(scan, locale);
+      return NextResponse.json({
+        success: true,
+        data: {
+          scan,
+          report,
+        },
+      });
+    }
+
     const limit = parseInt(url.searchParams.get('limit') || '50', 10);
     const offset = parseInt(url.searchParams.get('offset') || '0', 10);
 

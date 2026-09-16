@@ -6,6 +6,8 @@ export interface ScanLoadingModalProps {
   isOpen: boolean;
   onMinimize?: () => void;
   isMinimized?: boolean;
+  isReconnecting?: boolean;
+  reconnectMessage?: string;
 }
 
 const STEPS = [
@@ -31,7 +33,13 @@ const STEPS = [
   },
 ];
 
-export function ScanLoadingModal({ isOpen, onMinimize, isMinimized }: ScanLoadingModalProps) {
+export function ScanLoadingModal({
+  isOpen,
+  onMinimize,
+  isMinimized,
+  isReconnecting,
+  reconnectMessage,
+}: ScanLoadingModalProps) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [progressPercent, setProgressPercent] = useState(15);
 
@@ -77,20 +85,22 @@ export function ScanLoadingModal({ isOpen, onMinimize, isMinimized }: ScanLoadin
         >
           {/* Animated Spinner with pulse */}
           <div className="relative w-7 h-7 flex items-center justify-center">
-            <div className="absolute inset-0 rounded-full border-2 border-blue-500/20 animate-ping" />
-            <div className="w-6 h-6 rounded-full border-2 border-blue-400 border-t-transparent animate-spin" />
-            <div className="absolute w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+            <div className={`absolute inset-0 rounded-full border-2 ${isReconnecting ? 'border-amber-500/30' : 'border-blue-500/20'} animate-ping`} />
+            <div className={`w-6 h-6 rounded-full border-2 ${isReconnecting ? 'border-amber-400' : 'border-blue-400'} border-t-transparent animate-spin`} />
+            <div className={`absolute w-2 h-2 rounded-full ${isReconnecting ? 'bg-amber-400' : 'bg-blue-400'} animate-pulse`} />
           </div>
 
           <div className="text-left pr-2">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-blue-300">AI Verification Active</span>
+              <span className={`text-xs font-bold ${isReconnecting ? 'text-amber-300' : 'text-blue-300'}`}>
+                {isReconnecting ? '⚡ Resuming in Background' : 'AI Verification Active'}
+              </span>
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/80 text-blue-200 font-mono">
                 {progressPercent}%
               </span>
             </div>
             <p className="text-[11px] text-slate-300 line-clamp-1">
-              {STEPS[currentStepIndex].title}
+              {reconnectMessage || STEPS[currentStepIndex].title}
             </p>
           </div>
 
@@ -130,9 +140,11 @@ export function ScanLoadingModal({ isOpen, onMinimize, isMinimized }: ScanLoadin
             <div>
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <h3 className="text-sm sm:text-base font-black text-slate-900">CompliScan AI Engine</h3>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold">
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-ping" />
-                  Live
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  isReconnecting ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${isReconnecting ? 'bg-amber-600' : 'bg-blue-600'} animate-ping`} />
+                  {isReconnecting ? 'Resuming' : 'Live'}
                 </span>
               </div>
               <p className="text-[11px] sm:text-xs text-slate-500 font-medium line-clamp-1">
@@ -159,6 +171,19 @@ export function ScanLoadingModal({ isOpen, onMinimize, isMinimized }: ScanLoadin
 
         {/* Modal Body - Scrollable */}
         <div className="relative p-5 sm:p-7 flex flex-col items-center text-center overflow-y-auto">
+          {/* Background reconnect banner if phone screen turned back on */}
+          {isReconnecting && (
+            <div className="w-full mb-3 px-3.5 py-2.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center gap-2.5 text-left text-amber-900 animate-pulse">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
+              <div className="flex-1">
+                <p className="text-xs font-bold">Resuming in Background...</p>
+                <p className="text-[11px] text-amber-700 font-medium">
+                  {reconnectMessage || 'Phone screen unlocked / network reconnected. Synchronizing compliance report...'}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Animated Scanner Visual Centerpiece */}
           <div className="relative my-2 w-32 h-32 flex items-center justify-center">
             {/* Outer Rotating Glowing Ring */}

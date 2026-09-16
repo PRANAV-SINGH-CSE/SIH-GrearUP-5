@@ -20,6 +20,8 @@ import { AuthCacheService } from '@/lib/auth/auth-cache.service';
 import { AppScanItem, RuleCheckItem } from '@/lib/mock-scans';
 import { compressImageForUpload } from '@/lib/utils/client-image';
 import { MeasurementMetadata } from '@/lib/compliance/rules/rule.interface';
+import { BackgroundKeepAlive } from '@/lib/mobile/background-keepalive.service';
+import { BackgroundScanService } from '@/lib/mobile/background-scan.service';
 
 type Language = 'en' | 'hi' | 'mr' | 'ta' | 'gu';
 type ThemePreference = 'light' | 'dark' | 'system';
@@ -85,6 +87,147 @@ interface ApiScanResponse {
   };
 }
 
+function mapApiReportToAppScanItem(
+  apiScan: any,
+  apiReport: any,
+  primaryFile?: File
+): AppScanItem {
+  const decl = apiReport.extractedDeclarations || {};
+  const findings = apiReport.findings || {};
+
+  const ruleChecks: RuleCheckItem[] = [];
+
+  (findings.violations || []).forEach((v: any, idx: number) => {
+    ruleChecks.push({
+      id: `v-${idx}`,
+      ruleName: v.name || v.ruleName || 'Mandatory declaration violation',
+      status: 'NON_COMPLIANT',
+      statusLabel: 'Non-Compliant',
+      legalSection: v.legalReference,
+      detail: v.localizedExplanation || v.message,
+    });
+  });
+
+  (findings.warnings || []).forEach((w: any, idx: number) => {
+    ruleChecks.push({
+      id: `w-${idx}`,
+      ruleName: w.name || w.ruleName || 'Declaration warning',
+      status: 'WARNING',
+      statusLabel: 'Warning',
+      legalSection: w.legalReference,
+      detail: w.localizedExplanation || w.message,
+    });
+  });
+
+  (findings.passed || []).forEach((p: any, idx: number) => {
+    ruleChecks.push({
+      id: `p-${idx}`,
+      ruleName: p.name || p.ruleName || 'Verified declaration',
+      status: 'COMPLIANT',
+      statusLabel: 'Compliant',
+      legalSection: p.legalReference,
+    });
+  });
+
+  const mappedStatus =
+    apiReport.overallStatus === 'COMPLIANT'
+      ? 'COMPLIANT'
+      : apiReport.overallStatus === 'NON_COMPLIANT'
+        ? 'NON_COMPLIANT'
+        : 'NEEDS_REVIEW';
+
+  const detectedName =
+    apiReport.productInformation?.productName ||
+    decl.productName?.value ||
+    decl.genericName?.value ||
+    (primaryFile ? primaryFile.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') : 'Packaged Commodity');
+
+  const detectedMfg =
+    apiReport.productInformation?.manufacturerOrPacker ||
+    decl.manufacturer?.value?.name ||
+    decl.packer?.value?.name ||
+    decl.importer?.value?.name ||
+    'Verified Packer / Manufacturer';
+
+  const detectedAddress =
+    decl.manufacturer?.value?.address ||
+    decl.packer?.value?.address ||
+    decl.importer?.value?.address ||
+    'Registered Industrial Premises, India';
+
+  const detectedNetQty = decl.netQuantity?.value
+    ? `${decl.netQuantity.value.value} ${decl.netQuantity.value.unit || ''}`.trim()
+    : decl.netQuantity?.rawText || 'Standard Pack';
+
+  const detectedMrp = decl.mrp?.value?.amount !== undefined
+    ? `₹ ${decl.mrp.value.amount.toFixed(2)}${decl.mrp.value.isTaxInclusive ? ' (incl. of all taxes)' : ''}`
+    : decl.mrp?.rawText || 'Declared';
+
+  const detectedDate =
+    decl.manufactureDate?.value?.rawText ||
+    (decl.manufactureDate?.value?.month && decl.manufactureDate?.value?.year
+      ? `${String(decl.manufactureDate.value.month).padStart(2, '0')}/${decl.manufactureDate.value.year}`
+      : decl.packingDate?.value?.rawText || 'Recent');
+
+  const expiryVal = decl.expiryDate?.value;
+  const expiryString = typeof expiryVal === 'string'
+    ? expiryVal
+    : (expiryVal?.rawText || expiryVal?.isoString || null);
+  const detectedBestBefore =
+    decl.bestBefore?.value || expiryString || 'Within shelf life';
+
+  const detectedOrigin = decl.countryOfOrigin?.value || 'India';
+  const detectedBatch = decl.batchNumber?.value || `B-${Date.now().toString().slice(-4)}`;
+
+  const consumerCarePhone = decl.consumerCare?.value?.phone;
+  const consumerCareEmail = decl.consumerCare?.value?.email;
+  const consumerCareAddr = decl.consumerCare?.value?.address;
+  const detectedConsumerCare =
+    [consumerCarePhone, consumerCareEmail].filter(Boolean).join(' / ') ||
+    consumerCareAddr ||
+    '1800-11-4000 / consumer@gov.in';
+
+  const nowFormatted = new Date().toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  return {
+    id: apiScan.id,
+    scanIdNumber: `#CS${Date.now().toString().slice(-8)}`,
+    productName: detectedName,
+    manufacturer: detectedMfg,
+    scannedAt: nowFormatted,
+    status: mappedStatus,
+    statusLabel: mappedStatus === 'COMPLIANT' ? 'Compliant' : mappedStatus === 'NON_COMPLIANT' ? 'Non-Compliant' : 'Needs Review',
+    explanation: apiReport.statusExplanation || 'Compliance evaluation completed successfully.',
+    summary: {
+      passed: apiReport.counts?.passed ?? ruleChecks.filter((r) => r.status === 'COMPLIANT').length,
+      failed: apiReport.counts?.failed ?? ruleChecks.filter((r) => r.status === 'NON_COMPLIANT').length,
+      warning: apiReport.counts?.warning ?? ruleChecks.filter((r) => r.status === 'WARNING').length,
+      notApplicable: apiReport.counts?.notApplicable ?? 0,
+    },
+    extractedInfo: {
+      productName: detectedName,
+      manufacturer: detectedMfg,
+      consumerCare: detectedConsumerCare,
+      netQuantity: detectedNetQty,
+      mfgDate: detectedDate,
+      address: detectedAddress,
+      mrp: detectedMrp,
+      bestBefore: detectedBestBefore,
+      countryOfOrigin: detectedOrigin,
+      batchNo: detectedBatch,
+    },
+    ruleChecks: ruleChecks,
+    imageUrl: primaryFile ? URL.createObjectURL(primaryFile) : (apiScan.asset?.originalUrl || ''),
+    pdpApproximation: (apiReport as any).pdpApproximation || (apiScan as any).compliance?.pdpApproximation,
+  };
+}
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState<NavTabId>('home');
   const [scans, setScans] = useState<AppScanItem[]>([]);
@@ -97,6 +240,8 @@ export default function Home() {
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isScanMinimized, setIsScanMinimized] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
+  const [reconnectMessage, setReconnectMessage] = useState<string | undefined>(undefined);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Measurement Modal State
@@ -112,8 +257,14 @@ export default function Home() {
 
   const isVerifiedUser = Boolean(currentUser);
 
-  // Rehydrate cached user session and cached scans immediately on client mount
+  // Rehydrate cached user session, register SW, and auto-recover background scans on mount
   useEffect(() => {
+    // 1. Register Service Worker for mobile PWA execution
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+
+    // 2. Rehydrate cached user session
     const cachedUser = AuthCacheService.getCachedUser();
     if (cachedUser) {
       setCurrentUser(cachedUser);
@@ -124,6 +275,30 @@ export default function Home() {
       }
       // Re-fetch scans in background to ensure fresh data
       fetchUserScans(cachedUser.uid);
+    }
+
+    // 3. Auto-recover unfinished scan if phone reloaded or app cold-started while in background
+    const activeSession = BackgroundScanService.getActiveSession();
+    if (activeSession) {
+      setIsProcessing(true);
+      setIsReconnecting(true);
+      setReconnectMessage('App restored. Retrieving scan results...');
+      BackgroundScanService.checkCompletedScan(activeSession.offlineClientId)
+        .then((data) => {
+          if (data && data.scan && data.report) {
+            const restoredItem = mapApiReportToAppScanItem(data.scan, data.report);
+            setScans((prev) => [restoredItem, ...prev.filter((s) => s.id !== restoredItem.id)]);
+            setSelectedScan(restoredItem);
+            setActiveTab('reports');
+            BackgroundScanService.clearActiveSession();
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          setIsProcessing(false);
+          setIsReconnecting(false);
+          setReconnectMessage(undefined);
+        });
     }
   }, []);
 
@@ -310,11 +485,20 @@ export default function Home() {
 
     if (!effMeasurement) {
       effMeasurement = pendingMeasurementData || undefined;
-    }
-
-    // Cap at 3 images maximum (e.g. Front PDP, Back Information, Side/MRP)
+    }    // Cap at 3 images maximum (e.g. Front PDP, Back Information, Side/MRP)
     fileList = fileList.slice(0, 3);
     const primaryFile = fileList[0];
+
+    // Generate unique offlineClientId for background tracking & server idempotency
+    const offlineClientId = `scan_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    BackgroundScanService.saveActiveSession({
+      offlineClientId,
+      startedAt: Date.now(),
+      productNameHint: primaryFile?.name,
+    });
+
+    // Start Screen WakeLock & Background Keepalive
+    BackgroundKeepAlive.startKeepAlive();
 
     try {
       const formData = new FormData();
@@ -332,6 +516,7 @@ export default function Home() {
 
       formData.append('category', 'GENERIC_PACKAGED_COMMODITY');
       formData.append('locale', currentLanguage === 'hi' ? 'hi' : 'en');
+      formData.append('offlineClientId', offlineClientId);
       if (currentUser?.uid) {
         formData.append('userId', currentUser.uid);
         formData.append('userEmail', currentUser.email || '');
@@ -341,154 +526,18 @@ export default function Home() {
         formData.append('measurementData', JSON.stringify(effMeasurement));
       }
 
-      const res = await fetch('/api/scans', {
-        method: 'POST',
-        body: formData,
-      });
+      // Execute scan with automatic background recovery, server polling & exponential retry
+      const scanData = await BackgroundScanService.executeScanWithRecovery(
+        formData,
+        offlineClientId,
+        (status) => {
+          setIsReconnecting(status.isReconnecting);
+          setReconnectMessage(status.message);
+        }
+      );
 
-      const json = (await res.json()) as ApiScanResponse;
-
-      if (!json.success || !json.data) {
-        throw new Error(json.error?.message || 'Verification failed');
-      }
-
-      const { scan: apiScan, report: apiReport } = json.data;
-
-      // Map API result into AppScanItem format using real extractedDeclarations
-      const decl = apiReport.extractedDeclarations || {};
-      const findings = apiReport.findings || {};
-
-      const ruleChecks: RuleCheckItem[] = [];
-
-      (findings.violations || []).forEach((v, idx) => {
-        ruleChecks.push({
-          id: `v-${idx}`,
-          ruleName: v.name || v.ruleName || 'Mandatory declaration violation',
-          status: 'NON_COMPLIANT',
-          statusLabel: 'Non-Compliant',
-          legalSection: v.legalReference,
-          detail: v.localizedExplanation || v.message,
-        });
-      });
-
-      (findings.warnings || []).forEach((w, idx) => {
-        ruleChecks.push({
-          id: `w-${idx}`,
-          ruleName: w.name || w.ruleName || 'Declaration warning',
-          status: 'WARNING',
-          statusLabel: 'Warning',
-          legalSection: w.legalReference,
-          detail: w.localizedExplanation || w.message,
-        });
-      });
-
-      (findings.passed || []).forEach((p, idx) => {
-        ruleChecks.push({
-          id: `p-${idx}`,
-          ruleName: p.name || p.ruleName || 'Verified declaration',
-          status: 'COMPLIANT',
-          statusLabel: 'Compliant',
-          legalSection: p.legalReference,
-        });
-      });
-
-      const mappedStatus =
-        apiReport.overallStatus === 'COMPLIANT'
-          ? 'COMPLIANT'
-          : apiReport.overallStatus === 'NON_COMPLIANT'
-            ? 'NON_COMPLIANT'
-            : 'NEEDS_REVIEW';
-
-      const detectedName =
-        apiReport.productInformation?.productName ||
-        decl.productName?.value ||
-        decl.genericName?.value ||
-        (primaryFile ? primaryFile.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') : 'Packaged Commodity');
-
-      const detectedMfg =
-        apiReport.productInformation?.manufacturerOrPacker ||
-        decl.manufacturer?.value?.name ||
-        decl.packer?.value?.name ||
-        decl.importer?.value?.name ||
-        'Verified Packer / Manufacturer';
-
-      const detectedAddress =
-        decl.manufacturer?.value?.address ||
-        decl.packer?.value?.address ||
-        decl.importer?.value?.address ||
-        'Registered Industrial Premises, India';
-
-      const detectedNetQty = decl.netQuantity?.value
-        ? `${decl.netQuantity.value.value} ${decl.netQuantity.value.unit || ''}`.trim()
-        : decl.netQuantity?.rawText || 'Standard Pack';
-
-      const detectedMrp = decl.mrp?.value?.amount !== undefined
-        ? `₹ ${decl.mrp.value.amount.toFixed(2)}${decl.mrp.value.isTaxInclusive ? ' (incl. of all taxes)' : ''}`
-        : decl.mrp?.rawText || 'Declared';
-
-      const detectedDate =
-        decl.manufactureDate?.value?.rawText ||
-        (decl.manufactureDate?.value?.month && decl.manufactureDate?.value?.year
-          ? `${String(decl.manufactureDate.value.month).padStart(2, '0')}/${decl.manufactureDate.value.year}`
-          : decl.packingDate?.value?.rawText || 'Recent');
-
-      const expiryVal = decl.expiryDate?.value;
-      const expiryString = typeof expiryVal === 'string'
-        ? expiryVal
-        : (expiryVal?.rawText || expiryVal?.isoString || null);
-      const detectedBestBefore =
-        decl.bestBefore?.value || expiryString || 'Within shelf life';
-
-      const detectedOrigin = decl.countryOfOrigin?.value || 'India';
-      const detectedBatch = decl.batchNumber?.value || `B-${Date.now().toString().slice(-4)}`;
-
-      const consumerCarePhone = decl.consumerCare?.value?.phone;
-      const consumerCareEmail = decl.consumerCare?.value?.email;
-      const consumerCareAddr = decl.consumerCare?.value?.address;
-      const detectedConsumerCare =
-        [consumerCarePhone, consumerCareEmail].filter(Boolean).join(' / ') ||
-        consumerCareAddr ||
-        '1800-11-4000 / consumer@gov.in';
-
-      const nowFormatted = new Date().toLocaleDateString('en-GB', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-
-      const newScanItem: AppScanItem = {
-        id: apiScan.id,
-        scanIdNumber: `#CS${Date.now().toString().slice(-8)}`,
-        productName: detectedName,
-        manufacturer: detectedMfg,
-        scannedAt: nowFormatted,
-        status: mappedStatus,
-        statusLabel: mappedStatus === 'COMPLIANT' ? 'Compliant' : mappedStatus === 'NON_COMPLIANT' ? 'Non-Compliant' : 'Needs Review',
-        explanation: apiReport.statusExplanation || 'Compliance evaluation completed successfully.',
-        summary: {
-          passed: apiReport.counts?.passed ?? ruleChecks.filter((r) => r.status === 'COMPLIANT').length,
-          failed: apiReport.counts?.failed ?? ruleChecks.filter((r) => r.status === 'NON_COMPLIANT').length,
-          warning: apiReport.counts?.warning ?? ruleChecks.filter((r) => r.status === 'WARNING').length,
-          notApplicable: apiReport.counts?.notApplicable ?? 0,
-        },
-        extractedInfo: {
-          productName: detectedName,
-          manufacturer: detectedMfg,
-          consumerCare: detectedConsumerCare,
-          netQuantity: detectedNetQty,
-          mfgDate: detectedDate,
-          address: detectedAddress,
-          mrp: detectedMrp,
-          bestBefore: detectedBestBefore,
-          countryOfOrigin: detectedOrigin,
-          batchNo: detectedBatch,
-        },
-        ruleChecks: ruleChecks,
-        imageUrl: primaryFile ? URL.createObjectURL(primaryFile) : '',
-        pdpApproximation: (apiReport as any).pdpApproximation || (apiScan as any).compliance?.pdpApproximation,
-      };
+      const { scan: apiScan, report: apiReport } = scanData;
+      const newScanItem = mapApiReportToAppScanItem(apiScan, apiReport, primaryFile);
 
       // Persist directly to user-wise Firestore
       if (currentUser?.uid) {
@@ -518,8 +567,12 @@ export default function Home() {
       console.error('Scan failed:', err);
       setErrorMessage(err instanceof Error ? err.message : 'An error occurred during verification');
     } finally {
+      BackgroundKeepAlive.stopKeepAlive();
+      BackgroundScanService.clearActiveSession();
       isProcessingScanRef.current = false;
       setIsProcessing(false);
+      setIsReconnecting(false);
+      setReconnectMessage(undefined);
     }
   };
 
@@ -825,6 +878,8 @@ export default function Home() {
         isOpen={isProcessing}
         isMinimized={isScanMinimized}
         onMinimize={() => setIsScanMinimized((prev) => !prev)}
+        isReconnecting={isReconnecting}
+        reconnectMessage={reconnectMessage}
       />
     </div>
   );

@@ -120,7 +120,36 @@ export class CompliScanPipeline {
       throw new AppError('IMAGE_TOO_LARGE', 'Image size exceeds maximum limit of 15MB.', 400);
     }
 
-    // 2. Create Scan record
+    // 2. Idempotency Check: If phone reconnected after background sleep, check if scan already exists/completed
+    if (offlineClientId) {
+      const existing = await this.repository.findScanByOfflineClientId(offlineClientId);
+      if (existing) {
+        if (existing.status === 'COMPLETED' && existing.compliance) {
+          const report = ReportService.generateReport(existing, locale);
+          Logger.info('Found existing completed scan by offlineClientId', { scanId: existing.id, offlineClientId });
+          return { scan: existing, report };
+        } else if (
+          existing.status === 'VALIDATING' ||
+          existing.status === 'PREPROCESSING' ||
+          existing.status === 'OCR_PROCESSING' ||
+          existing.status === 'EXTRACTING' ||
+          existing.status === 'CLASSIFYING' ||
+          existing.status === 'VALIDATING_COMPLIANCE'
+        ) {
+          Logger.info('Scan with offlineClientId already processing on server, awaiting completion', { scanId: existing.id, offlineClientId });
+          for (let p = 0; p < 35; p++) {
+            await new Promise((r) => setTimeout(r, 1000));
+            const polled = await this.repository.getScanById(existing.id);
+            if (polled && polled.status === 'COMPLETED' && polled.compliance) {
+              const report = ReportService.generateReport(polled, locale);
+              return { scan: polled, report };
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Create Scan record
     const scan = await this.repository.createScan({
       category,
       rulesetVersion,
