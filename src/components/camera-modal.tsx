@@ -92,6 +92,7 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
   const [activeCameraLabel, setActiveCameraLabel] = useState<string>('1x Main Lens');
   const [currentZoom, setCurrentZoom] = useState<number>(1.0);
   const [supportedZoom, setSupportedZoom] = useState<{ min: number; max: number } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   // Real-time distance and sharpness assistance
   const [distanceStatus, setDistanceStatus] = useState<DistanceStatus>('searching');
@@ -223,6 +224,7 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
     if (isOpen) {
       setCapturedFile(null);
       setCapturedPreviewUrl(null);
+      setIsSubmitting(false);
       setDistanceStatus('optimal');
       lastDistanceStatusRef.current = 'optimal';
       smoothedProgressRef.current = 50;
@@ -238,6 +240,7 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
         setCapturedPreviewUrl(null);
       }
       setCapturedFile(null);
+      setIsSubmitting(false);
       setDistanceStatus('searching');
       lastDistanceStatusRef.current = 'searching';
       smoothedProgressRef.current = 50;
@@ -452,14 +455,16 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
   };
 
   const handleConfirmDirectScan = () => {
-    if (capturedFile) {
+    if (capturedFile && !isSubmitting) {
+      setIsSubmitting(true);
       onCapture(capturedFile);
       onClose();
     }
   };
 
   const handleConfirmMeasure = () => {
-    if (capturedFile) {
+    if (capturedFile && !isSubmitting) {
+      setIsSubmitting(true);
       if (onMeasure) {
         onMeasure(capturedFile);
       } else {
@@ -722,15 +727,17 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
             <button
               type="button"
               onClick={handleConfirmDirectScan}
-              className="flex-1 py-3 px-4 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs shadow-md transition-all cursor-pointer text-center"
+              disabled={isSubmitting}
+              className="flex-1 py-3 px-4 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs shadow-md transition-all cursor-pointer text-center disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Direct Scan
+              {isSubmitting ? 'Scanning...' : 'Direct Scan'}
             </button>
           </div>
           <button
             type="button"
             onClick={handleConfirmMeasure}
-            className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-blue-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
+            disabled={isSubmitting}
+            className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-blue-600/30 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <span>📏 Measure PDP & Scan</span>
             <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-semibold">Recommended</span>

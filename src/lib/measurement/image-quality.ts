@@ -13,13 +13,14 @@ import type { ImageQualityAssessment, MeasurementError } from './measurement.typ
 // ---------------------------------------------------------------------------
 // Thresholds (configurable)
 // ---------------------------------------------------------------------------
+// Thresholds (optimized for packaged commodities)
+// ---------------------------------------------------------------------------
 
-const MIN_WIDTH = 640;
-const MIN_HEIGHT = 480;
-const BLUR_THRESHOLD = 0.55;        // blurScore > this → IMAGE_TOO_BLURRY
-const MIN_BRIGHTNESS = 30;          // mean pixel intensity (0-255)
-const MAX_BRIGHTNESS = 240;
-const MIN_CONTRAST_STDEV = 18;      // std dev of pixel intensities
+const MIN_DIMENSION = 360;
+const BLUR_THRESHOLD = 0.85;        // blurScore > this → advisory blur warning
+const MIN_BRIGHTNESS = 20;          // mean pixel intensity (0-255)
+const MAX_BRIGHTNESS = 245;
+const MIN_CONTRAST_STDEV = 12;      // std dev of pixel intensities
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -72,11 +73,12 @@ export function assessImageQuality(
   const imageData = ctx.getImageData(0, 0, sw, sh);
   const errors: MeasurementError[] = [];
 
-  // 1. Resolution check
-  if (width < MIN_WIDTH || height < MIN_HEIGHT) {
+  // 1. Resolution check (tolerant to portrait and landscape formats)
+  const minDim = Math.min(width, height);
+  if (minDim < MIN_DIMENSION) {
     errors.push({
       code: 'IMAGE_RESOLUTION_TOO_LOW',
-      message: `Image resolution (${width}×${height}) is below minimum (${MIN_WIDTH}×${MIN_HEIGHT}).`,
+      message: `Image resolution (${width}×${height}) is below minimum acceptable dimension (${MIN_DIMENSION}px).`,
       suggestion: 'Move closer to the label or use a higher-resolution camera.',
     });
   }
@@ -92,13 +94,13 @@ export function assessImageQuality(
   if (brightness < MIN_BRIGHTNESS) {
     errors.push({
       code: 'IMAGE_POOR_LIGHTING',
-      message: 'Image is too dark for reliable measurement.',
+      message: 'Image is dark; measurements may have higher uncertainty.',
       suggestion: 'Increase lighting or use the camera flash.',
     });
   } else if (brightness > MAX_BRIGHTNESS) {
     errors.push({
       code: 'IMAGE_POOR_LIGHTING',
-      message: 'Image is overexposed / washed out.',
+      message: 'Image has bright glare spots.',
       suggestion: 'Reduce lighting or avoid direct flash glare.',
     });
   }
@@ -107,7 +109,7 @@ export function assessImageQuality(
   if (contrast < MIN_CONTRAST_STDEV) {
     errors.push({
       code: 'IMAGE_POOR_LIGHTING',
-      message: 'Image has very low contrast — text and edges may not be distinguishable.',
+      message: 'Image has low contrast between text and background.',
       suggestion: 'Ensure the label has good lighting and is not uniformly colored.',
     });
   }
@@ -118,13 +120,17 @@ export function assessImageQuality(
   if (blurScore > BLUR_THRESHOLD) {
     errors.push({
       code: 'IMAGE_TOO_BLURRY',
-      message: 'Image is too blurry for reliable measurement.',
-      suggestion: 'Hold the camera steady, ensure focus is locked, and avoid motion during capture.',
+      message: 'Image may be slightly soft or blurry.',
+      suggestion: 'Hold the camera steady and ensure focus is locked on text.',
     });
   }
 
+  // Only zero dimensions or micro-images are fatal rejections;
+  // blur and soft lighting are advisory warnings that do not block measurement.
+  const hasFatalError = errors.some((e) => e.code === 'IMAGE_RESOLUTION_TOO_LOW' || e.code === 'CALIBRATION_FAILED');
+
   return {
-    acceptable: errors.length === 0,
+    acceptable: !hasFatalError,
     blurScore,
     resolution: { width, height },
     brightnessScore: normalizedBrightness,
@@ -212,10 +218,11 @@ function computeBlurScore(gray: Float32Array, width: number, height: number): nu
   const variance = sumSq / count - mean * mean;
 
   // Map variance to a 0-1 blur score.
-  // High variance = sharp edges = low blur score.
-  // Empirically: variance > 500 = sharp, < 50 = very blurry.
-  const sharpnessIndicator = Math.min(variance, 1000);
-  const blurScore = 1 - Math.min(1, sharpnessIndicator / 500);
+  // On packaged commodity wrappers, text/barcodes are concentrated amidst smooth backgrounds.
+  // Empirically on packaging: variance > 60 is sharp text, variance 25-60 has readable declarations,
+  // and only variance < 12 is true motion smear/blur.
+  const sharpnessIndicator = Math.min(variance, 180);
+  const blurScore = Math.max(0, 1 - Math.min(1, sharpnessIndicator / 70));
 
   return Math.round(blurScore * 100) / 100;
 }

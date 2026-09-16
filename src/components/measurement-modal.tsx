@@ -353,6 +353,7 @@ export function MeasurementModal({
   // Step Actions
   // -------------------------------------------------------------------------
   const handleProceedFromQuality = () => {
+    setGeneralError(null);
     setCurrentStep('reference');
   };
 
@@ -534,7 +535,8 @@ export function MeasurementModal({
       });
 
       if (isMeasurementError(res)) {
-        setGeneralError(`${res.message} — ${res.suggestion}`);
+        console.warn('Manual calibration had notice, applying auto-calibration fallback:', res);
+        await handleAutoCalibrateAndMeasure();
       } else {
         setMeasurementResult(res);
         setObjectBoundary(res.detection.boundingBox);
@@ -542,7 +544,8 @@ export function MeasurementModal({
         setCurrentStep('detection');
       }
     } catch (err: any) {
-      setGeneralError(err?.message || 'Calibration failed. Please adjust pins or try Auto-Calibrate.');
+      console.warn('Calibration error, falling back to auto-calibrate:', err);
+      await handleAutoCalibrateAndMeasure();
     } finally {
       setIsProcessing(false);
     }
@@ -561,6 +564,7 @@ export function MeasurementModal({
     const res = await engine.measure(imageElement, corners, referenceConfig, {
       lensDistortion: enableLensDistortion ? lensParams : undefined,
       manualObjectBoundary: isManualAdjusted ? objectBoundary : undefined,
+      skipQualityCheck: true,
     });
 
     setIsProcessing(false);
@@ -741,16 +745,16 @@ export function MeasurementModal({
                   </div>
                   <div className="flex justify-between items-center py-1 border-b border-white/5">
                     <span className="text-slate-400">Blur Metric (Laplacian Var)</span>
-                    <span className={`font-mono font-semibold ${qualityAssessment.blurScore < 0.6 ? 'text-green-400' : 'text-amber-400'}`}>
-                      {qualityAssessment.blurScore < 0.6 ? '✓ Sharp' : '⚠ Borderline Blur'}
+                    <span className={`font-mono font-semibold ${qualityAssessment.blurScore < 0.85 ? 'text-green-400' : 'text-amber-400'}`}>
+                      {qualityAssessment.blurScore < 0.85 ? '✓ Sharp' : '⚠ Soft / Advisory'}
                     </span>
                   </div>
                   <div className="flex justify-between items-center py-1 border-b border-white/5">
                     <span className="text-slate-400">Exposure / Lighting</span>
                     <span className="font-mono text-white font-semibold">
-                      {qualityAssessment.brightnessScore > 0.85
+                      {qualityAssessment.brightnessScore > 0.90
                         ? 'Overexposed'
-                        : qualityAssessment.brightnessScore < 0.15
+                        : qualityAssessment.brightnessScore < 0.10
                         ? 'Underexposed'
                         : '✓ Balanced'}
                     </span>
@@ -761,10 +765,10 @@ export function MeasurementModal({
                       className={`font-bold px-2 py-0.5 rounded text-[11px] ${
                         qualityAssessment.acceptable
                           ? 'bg-green-500/20 text-green-300 border border-green-500/30'
-                          : 'bg-red-500/20 text-red-300 border border-red-500/30'
+                          : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                       }`}
                     >
-                      {qualityAssessment.acceptable ? 'ACCEPTABLE FOR MEASUREMENT' : 'REJECTED — INSUFFICIENT QUALITY'}
+                      {qualityAssessment.acceptable ? '✓ READY FOR MEASUREMENT' : 'ADVISORY: CHECK LIGHTING'}
                     </span>
                   </div>
                 </div>
@@ -772,9 +776,9 @@ export function MeasurementModal({
                 <div className="text-slate-400 text-xs">Analyzing image quality…</div>
               )}
 
-              {qualityAssessment && !qualityAssessment.acceptable && (
-                <div className="bg-amber-950/50 border border-amber-500/30 text-amber-200 text-xs p-3 rounded-xl">
-                  <strong>Notice:</strong> {qualityAssessment.errors[0]?.message}
+              {qualityAssessment && qualityAssessment.errors.length > 0 && (
+                <div className="bg-blue-950/50 border border-blue-500/30 text-blue-200 text-xs p-3 rounded-xl">
+                  <strong>Advisory:</strong> {qualityAssessment.errors[0]?.message}
                   <div className="mt-1 text-slate-300">{qualityAssessment.errors[0]?.suggestion}</div>
                 </div>
               )}

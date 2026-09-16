@@ -72,9 +72,12 @@ export class MeasurementEngine {
       // --- Step 1: Validate image quality ---
       this.emitStage('validating_image');
       const quality = assessImageQuality(imageElement);
-      if (!quality.acceptable && !options?.skipQualityCheck) {
+      const fatalError = quality.errors.find(
+        (e) => e.code === 'IMAGE_RESOLUTION_TOO_LOW' || e.code === 'CALIBRATION_FAILED'
+      );
+      if (fatalError && !options?.skipQualityCheck) {
         this.emitStage('failed');
-        return quality.errors[0]; // Return first error
+        return fatalError;
       }
 
       // --- Step 2: Validate corners ---
@@ -285,6 +288,11 @@ export class MeasurementEngine {
       );
 
       const warnings: string[] = [];
+      if (quality && quality.errors && quality.errors.length > 0) {
+        quality.errors.forEach((err) => {
+          warnings.push(`${err.message} (${err.suggestion})`);
+        });
+      }
       if (cornerResult.estimatedAngleDeg > 30) {
         warnings.push(`Significant perspective distortion (~${Math.round(cornerResult.estimatedAngleDeg)}°). Measurements may be less accurate.`);
       }

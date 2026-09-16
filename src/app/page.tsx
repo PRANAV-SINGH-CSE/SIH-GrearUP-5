@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User } from 'firebase/auth';
 import { AppHeader } from '@/components/app-header';
 import { BottomNav, NavTabId } from '@/components/bottom-nav';
@@ -270,8 +270,16 @@ export default function Home() {
     }
   };
 
+  const isProcessingScanRef = useRef(false);
+
   // Handle image capture from live camera or file input
   const handleProcessScanFile = async (rawFile: File, measurementData?: MeasurementMetadata) => {
+    // Prevent duplicate concurrent requests (e.g. mobile double-tap or touch+click synthetic events)
+    if (isProcessingScanRef.current) {
+      console.warn('Scan processing already in flight, ignoring duplicate call');
+      return;
+    }
+    isProcessingScanRef.current = true;
     setIsProcessing(true);
     setIsScanMinimized(false);
     setErrorMessage(null);
@@ -470,6 +478,7 @@ export default function Home() {
       console.error('Scan failed:', err);
       setErrorMessage(err instanceof Error ? err.message : 'An error occurred during verification');
     } finally {
+      isProcessingScanRef.current = false;
       setIsProcessing(false);
     }
   };
