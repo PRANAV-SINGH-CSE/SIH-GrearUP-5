@@ -26,13 +26,28 @@ export function SettingsScreen({
   onOpenGuidelinesModal,
   onClearData,
 }: SettingsScreenProps) {
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = window.localStorage.getItem('compliscan-notifications');
+      if (saved !== null) return saved === 'true';
+    }
+    return true;
+  });
   const [modalType, setModalType] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 2500);
+  };
+
+  const toggleNotifications = () => {
+    const nextVal = !notificationsEnabled;
+    setNotificationsEnabled(nextVal);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('compliscan-notifications', String(nextVal));
+    }
+    showToast(`Audit notifications ${nextVal ? 'enabled' : 'disabled'}`);
   };
 
   const handleClearCache = () => {
@@ -43,13 +58,21 @@ export function SettingsScreen({
   const userInitial = (currentUser?.displayName?.[0] || currentUser?.email?.[0] || 'U').toUpperCase();
   const userDisplayName = currentUser?.displayName || (currentUser?.email ? currentUser.email.split('@')[0] : 'Guest User');
   const userEmail = currentUser?.email || 'Not signed in';
-  const languageLabel = currentLanguage === 'hi' ? 'हिंदी (Hindi)' : 'English (EN)';
+
+  const languageNames: Record<'en' | 'hi' | 'mr' | 'ta' | 'gu', string> = {
+    en: 'English (EN)',
+    hi: 'हिंदी (Hindi)',
+    mr: 'मराठी (Marathi)',
+    ta: 'தமிழ் (Tamil)',
+    gu: 'ગુજરાતી (Gujarati)',
+  };
+  const languageLabel = languageNames[currentLanguage] || 'English (EN)';
   const themeLabel = themePreference === 'system' ? 'System Default' : themePreference === 'dark' ? 'Dark' : 'Light';
 
-  const chooseLanguage = (language: 'en' | 'hi') => {
+  const chooseLanguage = (language: 'en' | 'hi' | 'mr' | 'ta' | 'gu') => {
     onLanguageChange(language);
     setModalType(null);
-    showToast(`Language changed to ${language === 'hi' ? 'Hindi' : 'English'}`);
+    showToast(`Language changed to ${languageNames[language]}`);
   };
 
   const chooseTheme = (theme: 'light' | 'dark' | 'system') => {
@@ -221,7 +244,7 @@ export function SettingsScreen({
                   </div>
                   <button
                     type="button"
-                    onClick={() => setNotificationsEnabled(!notificationsEnabled)}
+                    onClick={toggleNotifications}
                     className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
                       notificationsEnabled ? 'bg-blue-600' : 'bg-slate-200'
                     }`}
@@ -612,7 +635,7 @@ export function SettingsScreen({
             </div>
             <button
               type="button"
-              onClick={() => setNotificationsEnabled(!notificationsEnabled)}
+              onClick={toggleNotifications}
               className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
                 notificationsEnabled ? 'bg-blue-600' : 'bg-slate-200'
               }`}
@@ -918,9 +941,21 @@ export function SettingsScreen({
               {modalType === 'language' && (
                 <div className="space-y-2">
                   <p>Select the language used for reports and supported interface content.</p>
-                  <div className="grid grid-cols-2 gap-2 pt-1">
-                    <button type="button" onClick={() => chooseLanguage('en')} className={`rounded-lg border px-3 py-2 text-xs font-semibold cursor-pointer ${currentLanguage === 'en' ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-blue-300'}`}>English</button>
-                    <button type="button" onClick={() => chooseLanguage('hi')} className={`rounded-lg border px-3 py-2 text-xs font-semibold cursor-pointer ${currentLanguage === 'hi' ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-blue-300'}`}>हिंदी (Hindi)</button>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+                    {(['en', 'hi', 'mr', 'ta', 'gu'] as const).map((lang) => (
+                      <button
+                        key={lang}
+                        type="button"
+                        onClick={() => chooseLanguage(lang)}
+                        className={`rounded-lg border px-3 py-2 text-xs font-semibold cursor-pointer ${
+                          currentLanguage === lang
+                            ? 'border-blue-600 bg-blue-600 text-white'
+                            : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-blue-300'
+                        }`}
+                      >
+                        {languageNames[lang]}
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}

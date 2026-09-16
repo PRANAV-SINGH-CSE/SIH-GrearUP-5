@@ -232,9 +232,21 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<NavTabId>('home');
   const [scans, setScans] = useState<AppScanItem[]>([]);
   const [selectedScan, setSelectedScan] = useState<AppScanItem | null>(null);
-  const [currentLanguage, setCurrentLanguage] = useState<Language>('en');
+  const [currentLanguage, setCurrentLanguage] = useState<Language>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = window.localStorage.getItem('compliscan-language') as Language;
+      if (saved && ['en', 'hi', 'mr', 'ta', 'gu'].includes(saved)) return saved;
+    }
+    return 'en';
+  });
   const [isHindiNoticeOpen, setIsHindiNoticeOpen] = useState(false);
-  const [themePreference, setThemePreference] = useState<ThemePreference>('system');
+  const [themePreference, setThemePreference] = useState<ThemePreference>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = window.localStorage.getItem('compliscan-theme') as ThemePreference;
+      if (saved && ['light', 'dark', 'system'].includes(saved)) return saved;
+    }
+    return 'system';
+  });
   const [systemPrefersDark, setSystemPrefersDark] = useState(false);
   const [isGuidelinesOpen, setIsGuidelinesOpen] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -339,10 +351,14 @@ export default function Home() {
 
   // Keep interface preferences available between visits without requiring an account.
   useEffect(() => {
-    const savedLanguage = window.localStorage.getItem('compliscan-language');
-    const savedTheme = window.localStorage.getItem('compliscan-theme');
-    if (savedLanguage === 'en' || savedLanguage === 'hi') setCurrentLanguage(savedLanguage);
-    if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'system') setThemePreference(savedTheme);
+    const savedLanguage = window.localStorage.getItem('compliscan-language') as Language | null;
+    const savedTheme = window.localStorage.getItem('compliscan-theme') as ThemePreference | null;
+    if (savedLanguage && ['en', 'hi', 'mr', 'ta', 'gu'].includes(savedLanguage)) {
+      setCurrentLanguage(savedLanguage);
+    }
+    if (savedTheme && ['light', 'dark', 'system'].includes(savedTheme)) {
+      setThemePreference(savedTheme);
+    }
 
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const updateSystemTheme = () => setSystemPrefersDark(mediaQuery.matches);
