@@ -5,8 +5,8 @@ import { User } from 'firebase/auth';
 
 export interface SettingsScreenProps {
   currentUser: User | null;
-  currentLanguage: 'en' | 'hi' | 'mr' | 'ta' | 'gu';
-  onLanguageChange: (language: 'en' | 'hi' | 'mr' | 'ta' | 'gu') => void;
+  currentLanguage: 'en' | 'hi';
+  onLanguageChange: (language: 'en' | 'hi') => void;
   themePreference: 'light' | 'dark' | 'system';
   onThemeChange: (theme: 'light' | 'dark' | 'system') => void;
   onOpenAuthModal: () => void;
@@ -59,17 +59,14 @@ export function SettingsScreen({
   const userDisplayName = currentUser?.displayName || (currentUser?.email ? currentUser.email.split('@')[0] : 'Guest User');
   const userEmail = currentUser?.email || 'Not signed in';
 
-  const languageNames: Record<'en' | 'hi' | 'mr' | 'ta' | 'gu', string> = {
+  const languageNames: Record<'en' | 'hi', string> = {
     en: 'English (EN)',
     hi: 'हिंदी (Hindi)',
-    mr: 'मराठी (Marathi)',
-    ta: 'தமிழ் (Tamil)',
-    gu: 'ગુજરાતી (Gujarati)',
   };
   const languageLabel = languageNames[currentLanguage] || 'English (EN)';
   const themeLabel = themePreference === 'system' ? 'System Default' : themePreference === 'dark' ? 'Dark' : 'Light';
 
-  const chooseLanguage = (language: 'en' | 'hi' | 'mr' | 'ta' | 'gu') => {
+  const chooseLanguage = (language: 'en' | 'hi') => {
     onLanguageChange(language);
     setModalType(null);
     showToast(`Language changed to ${languageNames[language]}`);
@@ -941,8 +938,8 @@ export function SettingsScreen({
               {modalType === 'language' && (
                 <div className="space-y-2">
                   <p>Select the language used for reports and supported interface content.</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
-                    {(['en', 'hi', 'mr', 'ta', 'gu'] as const).map((lang) => (
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    {(['en', 'hi'] as const).map((lang) => (
                       <button
                         key={lang}
                         type="button"

@@ -4,8 +4,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { NationalEmblem } from './ui-assets';
 
 export interface AppHeaderProps {
-  currentLanguage: 'en' | 'hi' | 'mr' | 'ta' | 'gu';
-  onLanguageChange: (lang: 'en' | 'hi' | 'mr' | 'ta' | 'gu') => void;
+  currentLanguage: 'en' | 'hi';
+  onLanguageChange: (lang: 'en' | 'hi') => void;
 }
 
 const LANGUAGES = [

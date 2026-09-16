@@ -23,7 +23,7 @@ import { MeasurementMetadata } from '@/lib/compliance/rules/rule.interface';
 import { BackgroundKeepAlive } from '@/lib/mobile/background-keepalive.service';
 import { BackgroundScanService } from '@/lib/mobile/background-scan.service';
 
-type Language = 'en' | 'hi' | 'mr' | 'ta' | 'gu';
+type Language = 'en' | 'hi';
 type ThemePreference = 'light' | 'dark' | 'system';
 
 interface ApiScanResponse {
@@ -235,7 +235,7 @@ export default function Home() {
   const [currentLanguage, setCurrentLanguage] = useState<Language>(() => {
     if (typeof window !== 'undefined') {
       const saved = window.localStorage.getItem('compliscan-language') as Language;
-      if (saved && ['en', 'hi', 'mr', 'ta', 'gu'].includes(saved)) return saved;
+      if (saved && ['en', 'hi'].includes(saved)) return saved;
     }
     return 'en';
   });
@@ -353,7 +353,7 @@ export default function Home() {
   useEffect(() => {
     const savedLanguage = window.localStorage.getItem('compliscan-language') as Language | null;
     const savedTheme = window.localStorage.getItem('compliscan-theme') as ThemePreference | null;
-    if (savedLanguage && ['en', 'hi', 'mr', 'ta', 'gu'].includes(savedLanguage)) {
+    if (savedLanguage && ['en', 'hi'].includes(savedLanguage)) {
       setCurrentLanguage(savedLanguage);
     }
     if (savedTheme && ['light', 'dark', 'system'].includes(savedTheme)) {
