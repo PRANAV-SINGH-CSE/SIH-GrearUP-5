@@ -16,6 +16,43 @@ export interface SettingsScreenProps {
   onClearData: () => void;
 }
 
+function UserAvatar({
+  photoURL,
+  name,
+  sizeClassName = 'w-12 h-12',
+  textClassName = 'text-lg',
+}: {
+  photoURL?: string | null;
+  name?: string | null;
+  sizeClassName?: string;
+  textClassName?: string;
+}) {
+  const [hasError, setHasError] = useState(false);
+  const initial = (name?.[0] || 'U').toUpperCase();
+
+  if (photoURL && !hasError) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={photoURL}
+        alt={name || 'Profile'}
+        referrerPolicy="no-referrer"
+        crossOrigin="anonymous"
+        onError={() => setHasError(true)}
+        className={`${sizeClassName} rounded-full object-cover shrink-0 border border-slate-200 shadow-2xs`}
+      />
+    );
+  }
+
+  return (
+    <div
+      className={`${sizeClassName} rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 text-white font-bold ${textClassName} flex items-center justify-center shrink-0 border border-blue-400/30 shadow-2xs select-none`}
+    >
+      {initial}
+    </div>
+  );
+}
+
 export function SettingsScreen({
   currentUser,
   currentLanguage,
@@ -159,18 +196,12 @@ export function SettingsScreen({
               </div>
 
               <div className="mt-4 flex items-center gap-3.5">
-                {currentUser?.photoURL ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={currentUser.photoURL}
-                    alt="Profile"
-                    className="w-14 h-14 rounded-full object-cover shrink-0 border border-slate-200"
-                  />
-                ) : (
-                  <div className="w-14 h-14 rounded-full bg-blue-100 text-blue-700 font-bold text-xl flex items-center justify-center shrink-0 border border-blue-200">
-                    {userInitial}
-                  </div>
-                )}
+                <UserAvatar
+                  photoURL={currentUser?.photoURL}
+                  name={userDisplayName}
+                  sizeClassName="w-14 h-14"
+                  textClassName="text-xl"
+                />
                 <div>
                   <div className="text-sm font-black text-slate-900">{userDisplayName}</div>
                   <div className="text-xs text-slate-500 font-medium">{userEmail}</div>
@@ -552,18 +583,12 @@ export function SettingsScreen({
         >
           <div className="flex items-center gap-3">
             {/* Avatar U or photo */}
-            {currentUser?.photoURL ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={currentUser.photoURL}
-                alt="Profile"
-                className="w-12 h-12 rounded-full object-cover shrink-0 border border-slate-200"
-              />
-            ) : (
-              <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-700 font-bold text-lg flex items-center justify-center shrink-0 border border-blue-200">
-                {userInitial}
-              </div>
-            )}
+            <UserAvatar
+              photoURL={currentUser?.photoURL}
+              name={userDisplayName}
+              sizeClassName="w-12 h-12"
+              textClassName="text-lg"
+            />
             <div>
               <div className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
                 <span>{userDisplayName}</span>

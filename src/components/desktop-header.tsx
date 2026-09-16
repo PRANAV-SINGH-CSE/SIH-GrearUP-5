@@ -26,6 +26,7 @@ export function DesktopHeader({
   onOpenGuidelinesModal,
 }: DesktopHeaderProps) {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
 
   const userInitial = (
     currentUser?.displayName?.[0] ||
@@ -159,15 +160,18 @@ export function DesktopHeader({
               onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
               className="flex items-center gap-2.5 py-1.5 px-3 rounded-full hover:bg-slate-50 border border-slate-200 transition-colors cursor-pointer select-none"
             >
-              {currentUser.photoURL ? (
+              {currentUser.photoURL && !avatarError ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={currentUser.photoURL}
                   alt="Profile"
+                  referrerPolicy="no-referrer"
+                  crossOrigin="anonymous"
+                  onError={() => setAvatarError(true)}
                   className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-200"
                 />
               ) : (
-                <div className="w-7 h-7 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center shrink-0">
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shrink-0 border border-blue-400/30">
                   {userInitial}
                 </div>
               )}
