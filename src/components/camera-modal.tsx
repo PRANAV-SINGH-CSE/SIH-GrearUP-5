@@ -224,6 +224,7 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
       setHasPermission(true);
       if (videoRef.current) {
         videoRef.current.srcObject = newStream;
+        videoRef.current.play().catch(() => {});
       }
     } catch (err: unknown) {
       console.warn('Camera access failed:', err);
@@ -231,6 +232,17 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
       setErrorMessage('Camera access is not permitted or unavailable on this device.');
     }
   }, [facingMode, stream]);
+
+  // Keep the active stream attached and playing continuously across panel captures and mode changes
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video && stream) {
+      if (video.srcObject !== stream) {
+        video.srcObject = stream;
+      }
+      video.play().catch(() => {});
+    }
+  }, [stream, previewIndex, isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -445,7 +457,8 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
         const newSlot: CapturedPanelSlot = { file, previewUrl: url, label };
         const updated = [...slots, newSlot];
         setSlots(updated);
-        setPreviewIndex(updated.length - 1);
+        // Keep camera live for panels 2 & 3; only review automatically when all 3 angles captured
+        setPreviewIndex(updated.length >= 3 ? 0 : null);
       } else {
         const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
         fetch(dataUrl)
@@ -455,7 +468,7 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
             const newSlot: CapturedPanelSlot = { file, previewUrl: dataUrl, label };
             const updated = [...slots, newSlot];
             setSlots(updated);
-            setPreviewIndex(updated.length - 1);
+            setPreviewIndex(updated.length >= 3 ? 0 : null);
           })
           .catch(() => {});
       }
@@ -474,7 +487,7 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
           const newSlot: CapturedPanelSlot = { file, previewUrl: dataUrl, label };
           const updated = [...slots, newSlot];
           setSlots(updated);
-          setPreviewIndex(updated.length - 1);
+          setPreviewIndex(updated.length >= 3 ? 0 : null);
         })
         .catch(() => {});
     }
@@ -636,19 +649,7 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
           <div className="absolute inset-0 bg-white z-50 pointer-events-none transition-opacity duration-150" />
         )}
 
-        {previewIndex !== null && slots[previewIndex] ? (
-          <div className="relative w-full h-full flex flex-col items-center justify-center bg-black/80 p-2">
-            <img
-              src={slots[previewIndex].previewUrl}
-              alt={slots[previewIndex].label}
-              className="max-h-full max-w-full object-contain rounded-xl shadow-md"
-            />
-            <div className="absolute top-3 left-3 bg-black/75 backdrop-blur-xs px-3 py-1 rounded-full text-xs font-semibold text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              {slots[previewIndex].label}
-            </div>
-          </div>
-        ) : hasPermission === false ? (
+        {hasPermission === false ? (
           <div className="text-center px-6 py-8 text-white space-y-4">
             <div className="w-14 h-14 mx-auto rounded-full bg-red-500/20 text-red-400 flex items-center justify-center">
               <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -689,140 +690,163 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
           </div>
         ) : (
           <>
+            {/* Live Video element stays continuously mounted to prevent camera disconnect or play-button overlay */}
             <video
               ref={videoRef}
               autoPlay
               playsInline
               muted
+              controls={false}
+              onLoadedMetadata={(e) => {
+                (e.currentTarget as HTMLVideoElement).play().catch(() => {});
+              }}
               className="w-full h-full object-cover"
             />
-            {/* Real-time Distance & Proximity Framing Overlay */}
-            <div
-              data-camera-viewfinder
-              style={{ backgroundColor: 'transparent' }}
-              className={`camera-viewfinder-overlay absolute inset-6 sm:inset-8 border-2 border-dashed rounded-2xl pointer-events-none flex flex-col justify-between p-3 transition-colors duration-200 bg-transparent ${
-                distanceStatus === 'optimal'
-                  ? 'border-emerald-400/80'
-                  : distanceStatus === 'too_far' || distanceStatus === 'too_close'
-                  ? 'border-amber-400/80'
-                  : distanceStatus === 'blurry'
-                  ? 'border-amber-400/60'
-                  : 'border-white/50'
-              }`}
-            >
-              {/* Top Row: Brackets + Proximity Guidance Pill */}
-              <div className="flex items-start justify-between">
-                <span
-                  className={`w-6 h-6 border-t-4 border-l-4 -mt-2 -ml-2 rounded-tl-sm transition-colors duration-200 ${
-                    distanceStatus === 'optimal'
-                      ? 'border-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]'
-                      : distanceStatus === 'too_far' || distanceStatus === 'too_close'
-                      ? 'border-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]'
-                      : 'border-blue-400'
-                  }`}
+
+            {/* Snapshot Review Overlay (rendered on top of live feed without unmounting the video) */}
+            {previewIndex !== null && slots[previewIndex] && (
+              <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/85 p-2 animate-in fade-in duration-150">
+                <img
+                  src={slots[previewIndex].previewUrl}
+                  alt={slots[previewIndex].label}
+                  className="max-h-full max-w-full object-contain rounded-xl shadow-md"
                 />
+                <div className="absolute top-3 left-3 bg-black/75 backdrop-blur-xs px-3 py-1 rounded-full text-xs font-semibold text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                  {slots[previewIndex].label}
+                </div>
+              </div>
+            )}
 
-                {/* Top Distance Gauge Pill */}
-                <div className="flex flex-col items-center gap-1">
-                  {distanceStatus === 'optimal' ? (
-                    <div className="bg-emerald-600/95 text-white px-3.5 py-1 rounded-full text-xs font-bold shadow-lg shadow-emerald-600/40 border border-emerald-300 flex items-center gap-1.5 animate-pulse">
-                      <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-                      <span>✓ Ready to Scan — Distance OK</span>
-                    </div>
-                  ) : distanceStatus === 'too_far' ? (
-                    <div className="bg-amber-600/95 text-white px-3.5 py-1 rounded-full text-xs font-bold shadow-lg shadow-amber-600/40 border border-amber-300 flex items-center gap-1.5">
-                      <span>🔍 Move Phone Closer</span>
-                    </div>
-                  ) : distanceStatus === 'too_close' ? (
-                    <div className="bg-amber-600/95 text-white px-3.5 py-1 rounded-full text-xs font-bold shadow-lg shadow-amber-600/40 border border-amber-300 flex items-center gap-1.5">
-                      <span>↔ Move Phone Back Slightly</span>
-                    </div>
-                  ) : distanceStatus === 'blurry' ? (
-                    <div className="bg-amber-600/95 text-white px-3.5 py-1 rounded-full text-xs font-bold shadow-lg shadow-amber-600/40 border border-amber-300 flex items-center gap-1.5">
-                      <span>📷 Hold Steady</span>
-                    </div>
-                  ) : (
-                    <div className="bg-emerald-700/80 backdrop-blur-xs text-white px-3 py-1 rounded-full text-xs font-medium border border-emerald-400/30 flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      <span>Auto-Approximating Package</span>
-                    </div>
-                  )}
+            {/* Real-time Distance & Proximity Framing Overlay (visible in live camera mode) */}
+            {previewIndex === null && (
+              <div
+                data-camera-viewfinder
+                style={{ backgroundColor: 'transparent' }}
+                className={`camera-viewfinder-overlay absolute inset-6 sm:inset-8 border-2 border-dashed rounded-2xl pointer-events-none flex flex-col justify-between p-3 transition-colors duration-200 bg-transparent ${
+                  distanceStatus === 'optimal'
+                    ? 'border-emerald-400/80'
+                    : distanceStatus === 'too_far' || distanceStatus === 'too_close'
+                    ? 'border-amber-400/80'
+                    : distanceStatus === 'blurry'
+                    ? 'border-amber-400/60'
+                    : 'border-white/50'
+                }`}
+              >
+                {/* Top Row: Brackets + Proximity Guidance Pill */}
+                <div className="flex items-start justify-between">
+                  <span
+                    className={`w-6 h-6 border-t-4 border-l-4 -mt-2 -ml-2 rounded-tl-sm transition-colors duration-200 ${
+                      distanceStatus === 'optimal'
+                        ? 'border-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]'
+                        : distanceStatus === 'too_far' || distanceStatus === 'too_close'
+                        ? 'border-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]'
+                        : 'border-blue-400'
+                    }`}
+                  />
 
-                  {/* Real-time Dynamic Proximity Slider Meter */}
-                  <div className="w-48 bg-black/75 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/15 flex flex-col gap-1 shadow-lg">
-                    <div className="flex items-center justify-between text-[9px] font-bold tracking-wider">
-                      <span className={`transition-colors duration-150 ${distanceStatus === 'too_far' ? 'text-amber-300 font-black drop-shadow-[0_0_4px_rgba(251,191,36,0.8)]' : 'text-slate-400'}`}>
-                        Far
-                      </span>
-                      <span className={`transition-colors duration-150 flex items-center gap-1 ${distanceStatus === 'optimal' ? 'text-emerald-300 font-black drop-shadow-[0_0_4px_rgba(52,211,153,0.8)]' : 'text-emerald-400/80 font-bold'}`}>
-                        {distanceStatus === 'optimal' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-ping" />}
-                        ● Ready
-                      </span>
-                      <span className={`transition-colors duration-150 ${distanceStatus === 'too_close' ? 'text-amber-300 font-black drop-shadow-[0_0_4px_rgba(251,191,36,0.8)]' : 'text-slate-400'}`}>
-                        Close
-                      </span>
-                    </div>
+                  {/* Top Distance Gauge Pill */}
+                  <div className="flex flex-col items-center gap-1">
+                    {distanceStatus === 'optimal' ? (
+                      <div className="bg-emerald-600/95 text-white px-3.5 py-1 rounded-full text-xs font-bold shadow-lg shadow-emerald-600/40 border border-emerald-300 flex items-center gap-1.5 animate-pulse">
+                        <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                        <span>✓ Ready to Scan — Distance OK</span>
+                      </div>
+                    ) : distanceStatus === 'too_far' ? (
+                      <div className="bg-amber-600/95 text-white px-3.5 py-1 rounded-full text-xs font-bold shadow-lg shadow-amber-600/40 border border-amber-300 flex items-center gap-1.5">
+                        <span>🔍 Move Phone Closer</span>
+                      </div>
+                    ) : distanceStatus === 'too_close' ? (
+                      <div className="bg-amber-600/95 text-white px-3.5 py-1 rounded-full text-xs font-bold shadow-lg shadow-amber-600/40 border border-amber-300 flex items-center gap-1.5">
+                        <span>↔ Move Phone Back Slightly</span>
+                      </div>
+                    ) : distanceStatus === 'blurry' ? (
+                      <div className="bg-amber-600/95 text-white px-3.5 py-1 rounded-full text-xs font-bold shadow-lg shadow-amber-600/40 border border-amber-300 flex items-center gap-1.5">
+                        <span>📷 Hold Steady</span>
+                      </div>
+                    ) : (
+                      <div className="bg-emerald-700/80 backdrop-blur-xs text-white px-3 py-1 rounded-full text-xs font-medium border border-emerald-400/30 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span>Auto-Approximating Package</span>
+                      </div>
+                    )}
 
-                    {/* Smooth Continuous Track with Tolerant Target Zone */}
-                    <div className="relative w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
-                      {/* Generous Ready Zone (18% to 88%) */}
-                      <div className="absolute left-[18%] right-[12%] inset-y-0 bg-emerald-500/40 rounded-full" />
-                      {/* Live Sliding Indicator Dot */}
-                      <div
-                        className={`absolute top-0 bottom-0 w-3 -ml-1.5 rounded-full transition-all duration-100 shadow-sm ${
-                          distanceStatus === 'optimal'
-                            ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,1)]'
-                            : distanceStatus === 'too_far' || distanceStatus === 'too_close'
-                            ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,1)]'
-                            : 'bg-white/60'
-                        }`}
-                        style={{ left: `${distanceProgress}%` }}
-                      />
+                    {/* Real-time Dynamic Proximity Slider Meter */}
+                    <div className="w-48 bg-black/75 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/15 flex flex-col gap-1 shadow-lg">
+                      <div className="flex items-center justify-between text-[9px] font-bold tracking-wider">
+                        <span className={`transition-colors duration-150 ${distanceStatus === 'too_far' ? 'text-amber-300 font-black drop-shadow-[0_0_4px_rgba(251,191,36,0.8)]' : 'text-slate-400'}`}>
+                          Far
+                        </span>
+                        <span className={`transition-colors duration-150 flex items-center gap-1 ${distanceStatus === 'optimal' ? 'text-emerald-300 font-black drop-shadow-[0_0_4px_rgba(52,211,153,0.8)]' : 'text-emerald-400/80 font-bold'}`}>
+                          {distanceStatus === 'optimal' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-ping" />}
+                          ● Ready
+                        </span>
+                        <span className={`transition-colors duration-150 ${distanceStatus === 'too_close' ? 'text-amber-300 font-black drop-shadow-[0_0_4px_rgba(251,191,36,0.8)]' : 'text-slate-400'}`}>
+                          Close
+                        </span>
+                      </div>
+
+                      {/* Smooth Continuous Track with Tolerant Target Zone */}
+                      <div className="relative w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
+                        {/* Generous Ready Zone (18% to 88%) */}
+                        <div className="absolute left-[18%] right-[12%] inset-y-0 bg-emerald-500/40 rounded-full" />
+                        {/* Live Sliding Indicator Dot */}
+                        <div
+                          className={`absolute top-0 bottom-0 w-3 -ml-1.5 rounded-full transition-all duration-100 shadow-sm ${
+                            distanceStatus === 'optimal'
+                              ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,1)]'
+                              : distanceStatus === 'too_far' || distanceStatus === 'too_close'
+                              ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,1)]'
+                              : 'bg-white/60'
+                          }`}
+                          style={{ left: `${distanceProgress}%` }}
+                        />
+                      </div>
                     </div>
                   </div>
+
+                  <span
+                    className={`w-6 h-6 border-t-4 border-r-4 -mt-2 -mr-2 rounded-tr-sm transition-colors duration-200 ${
+                      distanceStatus === 'optimal'
+                        ? 'border-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]'
+                        : distanceStatus === 'too_far' || distanceStatus === 'too_close'
+                        ? 'border-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]'
+                        : 'border-blue-400'
+                    }`}
+                  />
                 </div>
 
-                <span
-                  className={`w-6 h-6 border-t-4 border-r-4 -mt-2 -mr-2 rounded-tr-sm transition-colors duration-200 ${
-                    distanceStatus === 'optimal'
-                      ? 'border-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]'
-                      : distanceStatus === 'too_far' || distanceStatus === 'too_close'
-                      ? 'border-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]'
-                      : 'border-blue-400'
-                  }`}
-                />
+                {/* Bottom Instructions / Subtitle */}
+                <div className="flex items-end justify-between">
+                  <span
+                    className={`w-6 h-6 border-b-4 border-l-4 -mb-2 -ml-2 rounded-bl-sm transition-colors duration-200 ${
+                      distanceStatus === 'optimal'
+                        ? 'border-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]'
+                        : distanceStatus === 'too_far' || distanceStatus === 'too_close'
+                        ? 'border-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]'
+                        : 'border-blue-400'
+                    }`}
+                  />
+
+                  <p className="text-center text-[11px] text-white/90 bg-black/60 backdrop-blur-xs py-0.5 px-3 rounded-full mx-auto self-center flex items-center gap-1.5 border border-white/10 shadow-sm">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="font-semibold">{activeCameraLabel}</span>
+                    <span className="text-white/40">•</span>
+                    <span>Keep MRP & Qty in frame</span>
+                  </p>
+
+                  <span
+                    className={`w-6 h-6 border-b-4 border-r-4 -mb-2 -mr-2 rounded-br-sm transition-colors duration-200 ${
+                      distanceStatus === 'optimal'
+                        ? 'border-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]'
+                        : distanceStatus === 'too_far' || distanceStatus === 'too_close'
+                        ? 'border-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]'
+                        : 'border-blue-400'
+                    }`}
+                  />
+                </div>
               </div>
-
-              {/* Bottom Instructions / Subtitle */}
-              <div className="flex items-end justify-between">
-                <span
-                  className={`w-6 h-6 border-b-4 border-l-4 -mb-2 -ml-2 rounded-bl-sm transition-colors duration-200 ${
-                    distanceStatus === 'optimal'
-                      ? 'border-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]'
-                      : distanceStatus === 'too_far' || distanceStatus === 'too_close'
-                      ? 'border-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]'
-                      : 'border-blue-400'
-                  }`}
-                />
-
-                <p className="text-center text-[11px] text-white/90 bg-black/60 backdrop-blur-xs py-0.5 px-3 rounded-full mx-auto self-center flex items-center gap-1.5 border border-white/10 shadow-sm">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="font-semibold">{activeCameraLabel}</span>
-                  <span className="text-white/40">•</span>
-                  <span>Keep MRP & Qty in frame</span>
-                </p>
-
-                <span
-                  className={`w-6 h-6 border-b-4 border-r-4 -mb-2 -mr-2 rounded-br-sm transition-colors duration-200 ${
-                    distanceStatus === 'optimal'
-                      ? 'border-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]'
-                      : distanceStatus === 'too_far' || distanceStatus === 'too_close'
-                      ? 'border-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]'
-                      : 'border-blue-400'
-                  }`}
-                />
-              </div>
-            </div>
+            )}
           </>
         )}
         <canvas ref={canvasRef} className="hidden" />
