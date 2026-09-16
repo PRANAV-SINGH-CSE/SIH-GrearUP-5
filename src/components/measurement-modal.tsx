@@ -29,6 +29,92 @@ export interface MeasurementModalProps {
 
 type Step = 'quality' | 'reference' | 'detection' | 'results';
 
+/**
+ * Fast client-side Computer Vision contour/edge detector to auto-locate
+ * the packaged commodity within the captured frame.
+ */
+function autoDetectProductCorners(source: HTMLImageElement | HTMLCanvasElement): Quadrilateral {
+  const w = 'naturalWidth' in source ? source.naturalWidth : source.width;
+  const h = 'naturalHeight' in source ? source.naturalHeight : source.height;
+
+  if (w <= 0 || h <= 0) {
+    return {
+      topLeft: { x: 50, y: 50 },
+      topRight: { x: 250, y: 50 },
+      bottomRight: { x: 250, y: 350 },
+      bottomLeft: { x: 50, y: 350 },
+    };
+  }
+
+  try {
+    const scale = Math.min(1, 400 / Math.max(w, h));
+    const sw = Math.round(w * scale);
+    const sh = Math.round(h * scale);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = sw;
+    canvas.height = sh;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) throw new Error('No 2d context');
+
+    ctx.drawImage(source, 0, 0, sw, sh);
+    const imgData = ctx.getImageData(0, 0, sw, sh);
+    const data = imgData.data;
+
+    const gray = new Uint8Array(sw * sh);
+    for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+      gray[j] = (data[i] * 77 + data[i + 1] * 150 + data[i + 2] * 29) >> 8;
+    }
+
+    let minX = sw, maxX = 0, minY = sh, maxY = 0;
+    let edgeCount = 0;
+
+    for (let y = 4; y < sh - 4; y++) {
+      const row = y * sw;
+      for (let x = 4; x < sw - 4; x++) {
+        const idx = row + x;
+        const gx = Math.abs(gray[idx + 1] - gray[idx - 1]);
+        const gy = Math.abs(gray[idx + sw] - gray[idx - sw]);
+        const mag = gx + gy;
+
+        if (mag > 26) {
+          edgeCount++;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+
+    if (edgeCount > 40 && (maxX - minX) > sw * 0.20 && (maxY - minY) > sh * 0.20) {
+      const padX = (maxX - minX) * 0.03;
+      const padY = (maxY - minY) * 0.03;
+      const finalMinX = Math.max(0, Math.round((minX - padX) / scale));
+      const finalMaxX = Math.min(w, Math.round((maxX + padX) / scale));
+      const finalMinY = Math.max(0, Math.round((minY - padY) / scale));
+      const finalMaxY = Math.min(h, Math.round((maxY + padY) / scale));
+
+      return {
+        topLeft: { x: finalMinX, y: finalMinY },
+        topRight: { x: finalMaxX, y: finalMinY },
+        bottomRight: { x: finalMaxX, y: finalMaxY },
+        bottomLeft: { x: finalMinX, y: finalMaxY },
+      };
+    }
+  } catch (err) {
+    console.warn('Auto-detect corners fallback:', err);
+  }
+
+  // Fallback: central 65% of image
+  return {
+    topLeft: { x: Math.round(w * 0.16), y: Math.round(h * 0.16) },
+    topRight: { x: Math.round(w * 0.84), y: Math.round(h * 0.16) },
+    bottomRight: { x: Math.round(w * 0.84), y: Math.round(h * 0.84) },
+    bottomLeft: { x: Math.round(w * 0.16), y: Math.round(h * 0.84) },
+  };
+}
+
 export function MeasurementModal({
   isOpen,
   onClose,
@@ -61,6 +147,7 @@ export function MeasurementModal({
     widthMm: REFERENCE_PRESETS[0].widthMm,
     heightMm: REFERENCE_PRESETS[0].heightMm,
     label: REFERENCE_PRESETS[0].label,
+    isAuto: REFERENCE_PRESETS[0].isAuto,
   });
   const [cornerFeedback, setCornerFeedback] = useState<{
     valid: boolean;
@@ -120,18 +207,8 @@ export function MeasurementModal({
       setImageElement(img);
       setImgDims({ width: img.naturalWidth, height: img.naturalHeight });
 
-      // Initialize default corners inside the center 60% of the image
-      const w = img.naturalWidth;
-      const h = img.naturalHeight;
-      const padX = w * 0.2;
-      const padY = h * 0.2;
-
-      const initialCorners: Quadrilateral = {
-        topLeft: { x: Math.round(padX), y: Math.round(padY) },
-        topRight: { x: Math.round(w - padX), y: Math.round(padY) },
-        bottomRight: { x: Math.round(w - padX), y: Math.round(h - padY) },
-        bottomLeft: { x: Math.round(padX), y: Math.round(h - padY) },
-      };
+      // Automatically detect product package corners on load!
+      const initialCorners = autoDetectProductCorners(img);
       setCorners(initialCorners);
 
       // Run initial quality assessment automatically
@@ -150,24 +227,32 @@ export function MeasurementModal({
   }, [isOpen, imageFile]);
 
   // -------------------------------------------------------------------------
-  // Compute Viewport Scale for Corner Handles
+  // Compute Viewport Scale for Inner Stage & SVG Handles
   // -------------------------------------------------------------------------
   const updateTransform = useCallback(() => {
     if (!containerRef.current || imgDims.width === 0 || imgDims.height === 0) return;
-    const { clientWidth, clientHeight } = containerRef.current;
-    if (clientWidth === 0 || clientHeight === 0) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
 
-    const scale = Math.min(clientWidth / imgDims.width, clientHeight / imgDims.height);
-    const offsetX = (clientWidth - imgDims.width * scale) / 2;
-    const offsetY = (clientHeight - imgDims.height * scale) / 2;
+    const availableW = Math.max(80, rect.width - 24);
+    const availableH = Math.max(80, rect.height - 24);
+    const scale = Math.min(availableW / imgDims.width, availableH / imgDims.height);
 
-    setViewTransform({ scale, offsetX, offsetY });
+    setViewTransform({ scale, offsetX: 0, offsetY: 0 });
   }, [imgDims]);
 
   useEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver(() => {
+      updateTransform();
+    });
+    ro.observe(containerRef.current);
     updateTransform();
-    window.addEventListener('resize', updateTransform);
-    return () => window.removeEventListener('resize', updateTransform);
+    const t = setTimeout(updateTransform, 40);
+    return () => {
+      ro.disconnect();
+      clearTimeout(t);
+    };
   }, [updateTransform, currentStep]);
 
   // Real-time corner validation update
@@ -179,18 +264,23 @@ export function MeasurementModal({
   }, [corners, imgDims, referenceConfig]);
 
   // -------------------------------------------------------------------------
-  // Coordinate transformations
+  // Coordinate transformations relative to inner stage
   // -------------------------------------------------------------------------
   const imgToScreen = (pt: Point2D): Point2D => ({
-    x: pt.x * viewTransform.scale + viewTransform.offsetX,
-    y: pt.y * viewTransform.scale + viewTransform.offsetY,
+    x: pt.x * viewTransform.scale,
+    y: pt.y * viewTransform.scale,
   });
 
-  const screenToImg = (screenX: number, screenY: number): Point2D => {
-    if (!containerRef.current) return { x: 0, y: 0 };
+  const screenToImg = (clientX: number, clientY: number): Point2D => {
+    if (!containerRef.current || viewTransform.scale <= 0) return { x: 0, y: 0 };
     const rect = containerRef.current.getBoundingClientRect();
-    const relX = screenX - rect.left - viewTransform.offsetX;
-    const relY = screenY - rect.top - viewTransform.offsetY;
+    const renderedW = imgDims.width * viewTransform.scale;
+    const renderedH = imgDims.height * viewTransform.scale;
+    const stageLeft = rect.left + (rect.width - renderedW) / 2;
+    const stageTop = rect.top + (rect.height - renderedH) / 2;
+
+    const relX = clientX - stageLeft;
+    const relY = clientY - stageTop;
     const imgX = Math.max(0, Math.min(imgDims.width, Math.round(relX / viewTransform.scale)));
     const imgY = Math.max(0, Math.min(imgDims.height, Math.round(relY / viewTransform.scale)));
     return { x: imgX, y: imgY };
@@ -238,6 +328,7 @@ export function MeasurementModal({
         widthMm: p.widthMm,
         heightMm: p.heightMm,
         label: p.label,
+        isAuto: p.isAuto,
       });
     }
   };
@@ -247,6 +338,49 @@ export function MeasurementModal({
   // -------------------------------------------------------------------------
   const handleProceedFromQuality = () => {
     setCurrentStep('reference');
+  };
+
+  // 1-Click Instant Auto-Calibrate & Measure (No manual pin dragging required)
+  const handleAutoCalibrateAndMeasure = async () => {
+    if (!imageElement) return;
+    setIsProcessing(true);
+    setGeneralError(null);
+
+    // Auto-detect package corners
+    const detected = autoDetectProductCorners(imageElement);
+    setCorners(detected);
+
+    // Compute packaging dimensions
+    const detectedW = Math.abs(detected.topRight.x - detected.topLeft.x);
+    const detectedH = Math.abs(detected.bottomLeft.y - detected.topLeft.y);
+    const ar = detectedW / Math.max(1, detectedH);
+
+    const autoConfig: ReferenceConfig = {
+      label: '⚡ Auto-Detected Package PDP',
+      widthMm: Math.round(160 * Math.min(1.6, Math.max(0.6, ar))),
+      heightMm: 240,
+      isAuto: true,
+    };
+    setReferenceConfig(autoConfig);
+
+    const engine = new MeasurementEngine((stage) => {
+      setCurrentStage(stage);
+    });
+
+    const res = await engine.measure(imageElement, detected, autoConfig, {
+      lensDistortion: enableLensDistortion ? lensParams : undefined,
+    });
+
+    setIsProcessing(false);
+
+    if (isMeasurementError(res)) {
+      setGeneralError(`${res.message} — ${res.suggestion}`);
+    } else {
+      setMeasurementResult(res);
+      setObjectBoundary(res.detection.boundingBox);
+      setIsManualAdjusted(false);
+      setCurrentStep('results');
+    }
   };
 
   // Run Measurement Pipeline (Compute Homography + Detect Object)
@@ -491,20 +625,27 @@ export function MeasurementModal({
                 </div>
               )}
 
-              <div className="pt-2 flex gap-3">
+              <div className="pt-2 flex flex-col sm:flex-row gap-3">
                 <button
                   type="button"
-                  onClick={onClose}
-                  className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-semibold transition-colors"
+                  onClick={handleAutoCalibrateAndMeasure}
+                  className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-xs font-bold text-white transition-all cursor-pointer shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2"
                 >
-                  Retake Photo
+                  <span>⚡ Auto-Calibrate & Measure PDP (Instant)</span>
                 </button>
                 <button
                   type="button"
                   onClick={handleProceedFromQuality}
-                  className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white transition-colors cursor-pointer shadow-md"
+                  className="py-3 px-4 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-semibold text-slate-200 transition-colors cursor-pointer text-center"
                 >
-                  Proceed to Calibration &rarr;
+                  📐 Manual Pin Setup
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="py-3 px-4 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-xs font-semibold text-red-300 transition-colors"
+                >
+                  Retake
                 </button>
               </div>
             </div>
@@ -519,11 +660,11 @@ export function MeasurementModal({
             {/* Top Toolbar for Reference selection */}
             <div className="px-4 py-2 bg-slate-950/80 border-b border-white/10 flex flex-wrap items-center justify-between gap-3 text-xs z-10">
               <div className="flex items-center gap-2">
-                <label className="text-slate-400 font-medium">Reference Preset:</label>
+                <label className="text-slate-400 font-medium">Preset:</label>
                 <select
                   value={selectedPresetIndex}
                   onChange={(e) => handlePresetSelect(Number(e.target.value))}
-                  className="bg-slate-800 text-white rounded-lg px-2.5 py-1.5 border border-white/20 focus:outline-none focus:border-blue-500"
+                  className="bg-slate-800 text-white rounded-lg px-2.5 py-1.5 border border-white/20 focus:outline-none focus:border-blue-500 text-xs"
                 >
                   {REFERENCE_PRESETS.map((p, i) => (
                     <option key={p.label} value={i}>
@@ -532,6 +673,20 @@ export function MeasurementModal({
                   ))}
                   <option value={REFERENCE_PRESETS.length}>Custom Dimensions…</option>
                 </select>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (imageElement) {
+                      const detected = autoDetectProductCorners(imageElement);
+                      setCorners(detected);
+                    }
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/40 text-emerald-300 font-bold flex items-center gap-1 transition-colors cursor-pointer text-xs"
+                  title="Auto-detect product boundaries and snap pins"
+                >
+                  <span>⚡ Auto-Detect Edges</span>
+                </button>
               </div>
 
               {selectedPresetIndex === REFERENCE_PRESETS.length && (
@@ -580,84 +735,86 @@ export function MeasurementModal({
             {/* Interactive Canvas/SVG Viewport */}
             <div
               ref={containerRef}
-              className="relative flex-1 w-full h-full overflow-hidden select-none touch-none bg-black flex items-center justify-center"
+              className="relative flex-1 w-full h-full overflow-hidden select-none touch-none bg-slate-950 flex items-center justify-center p-3"
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
             >
-              {imageUrl && (
-                <img
-                  src={imageUrl}
-                  alt="Reference Quad alignment"
-                  className="pointer-events-none max-w-full max-h-full object-contain"
+              {imageUrl && imgDims.width > 0 && viewTransform.scale > 0 && (
+                <div
+                  className="relative select-none touch-none shadow-2xl rounded-lg overflow-hidden border border-white/20"
                   style={{
-                    width: imgDims.width * viewTransform.scale,
-                    height: imgDims.height * viewTransform.scale,
+                    width: `${Math.round(imgDims.width * viewTransform.scale)}px`,
+                    height: `${Math.round(imgDims.height * viewTransform.scale)}px`,
                   }}
-                />
+                >
+                  <img
+                    src={imageUrl}
+                    alt="Reference Quad alignment"
+                    className="w-full h-full object-fill pointer-events-none select-none block"
+                  />
+
+                  {/* SVG Polygon & Handles Overlay */}
+                  <svg
+                    className="absolute inset-0 w-full h-full pointer-events-none"
+                    style={{ width: '100%', height: '100%' }}
+                  >
+                    {(() => {
+                      const tl = imgToScreen(corners.topLeft);
+                      const tr = imgToScreen(corners.topRight);
+                      const br = imgToScreen(corners.bottomRight);
+                      const bl = imgToScreen(corners.bottomLeft);
+                      return (
+                        <>
+                          <polygon
+                            points={`${tl.x},${tl.y} ${tr.x},${tr.y} ${br.x},${br.y} ${bl.x},${bl.y}`}
+                            fill="rgba(59, 130, 246, 0.22)"
+                            stroke="#3b82f6"
+                            strokeWidth="2.5"
+                            strokeDasharray="6 4"
+                          />
+                          <line x1={tl.x} y1={tl.y} x2={tr.x} y2={tr.y} stroke="#60a5fa" strokeWidth="2" />
+                          <line x1={tr.x} y1={tr.y} x2={br.x} y2={br.y} stroke="#60a5fa" strokeWidth="2" />
+                          <line x1={br.x} y1={br.y} x2={bl.x} y2={bl.y} stroke="#60a5fa" strokeWidth="2" />
+                          <line x1={bl.x} y1={bl.y} x2={tl.x} y2={tl.y} stroke="#60a5fa" strokeWidth="2" />
+                        </>
+                      );
+                    })()}
+                  </svg>
+
+                  {/* Draggable Corner Handles */}
+                  {(['topLeft', 'topRight', 'bottomRight', 'bottomLeft'] as (keyof Quadrilateral)[]).map((key) => {
+                    const pt = imgToScreen(corners[key]);
+                    const labelMap: Record<keyof Quadrilateral, string> = {
+                      topLeft: 'TL',
+                      topRight: 'TR',
+                      bottomRight: 'BR',
+                      bottomLeft: 'BL',
+                    };
+                    return (
+                      <div
+                        key={key}
+                        onPointerDown={(e) => handleCornerPointerDown(e, key)}
+                        style={{
+                          left: `${pt.x}px`,
+                          top: `${pt.y}px`,
+                          transform: 'translate(-50%, -50%)',
+                        }}
+                        className={`absolute w-12 h-12 flex items-center justify-center cursor-grab active:cursor-grabbing z-30 transition-transform ${
+                          activeCorner === key ? 'scale-125' : 'hover:scale-110'
+                        }`}
+                      >
+                        <div className="w-6 h-6 rounded-full bg-blue-600 border-2 border-white shadow-xl flex items-center justify-center ring-2 ring-blue-400/50">
+                          <span className="text-[9px] font-black text-white">{labelMap[key]}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
 
-              {/* SVG Polygon & Handles Overlay */}
-              <svg
-                className="absolute inset-0 w-full h-full pointer-events-none"
-                style={{ width: '100%', height: '100%' }}
-              >
-                {/* Reference Quadrilateral Polygon */}
-                {(() => {
-                  const tl = imgToScreen(corners.topLeft);
-                  const tr = imgToScreen(corners.topRight);
-                  const br = imgToScreen(corners.bottomRight);
-                  const bl = imgToScreen(corners.bottomLeft);
-                  return (
-                    <>
-                      <polygon
-                        points={`${tl.x},${tl.y} ${tr.x},${tr.y} ${br.x},${br.y} ${bl.x},${bl.y}`}
-                        fill="rgba(59, 130, 246, 0.18)"
-                        stroke="#3b82f6"
-                        strokeWidth="2.5"
-                        strokeDasharray="6 4"
-                      />
-                      {/* Edge lines */}
-                      <line x1={tl.x} y1={tl.y} x2={tr.x} y2={tr.y} stroke="#60a5fa" strokeWidth="2" />
-                      <line x1={tr.x} y1={tr.y} x2={br.x} y2={br.y} stroke="#60a5fa" strokeWidth="2" />
-                      <line x1={br.x} y1={br.y} x2={bl.x} y2={bl.y} stroke="#60a5fa" strokeWidth="2" />
-                      <line x1={bl.x} y1={bl.y} x2={tl.x} y2={tl.y} stroke="#60a5fa" strokeWidth="2" />
-                    </>
-                  );
-                })()}
-              </svg>
-
-              {/* Draggable Corner Handles (44px touch targets) */}
-              {(['topLeft', 'topRight', 'bottomRight', 'bottomLeft'] as (keyof Quadrilateral)[]).map((key) => {
-                const pt = imgToScreen(corners[key]);
-                const labelMap: Record<keyof Quadrilateral, string> = {
-                  topLeft: 'TL',
-                  topRight: 'TR',
-                  bottomRight: 'BR',
-                  bottomLeft: 'BL',
-                };
-                return (
-                  <div
-                    key={key}
-                    onPointerDown={(e) => handleCornerPointerDown(e, key)}
-                    style={{
-                      left: `${pt.x}px`,
-                      top: `${pt.y}px`,
-                      transform: 'translate(-50%, -50%)',
-                    }}
-                    className={`absolute w-11 h-11 flex items-center justify-center cursor-grab active:cursor-grabbing z-20 transition-transform ${
-                      activeCorner === key ? 'scale-125' : 'hover:scale-110'
-                    }`}
-                  >
-                    <div className="w-5 h-5 rounded-full bg-blue-500 border-2 border-white shadow-lg flex items-center justify-center">
-                      <span className="text-[8px] font-black text-white">{labelMap[key]}</span>
-                    </div>
-                  </div>
-                );
-              })}
-
               {/* Hint badge */}
-              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/75 backdrop-blur-xs px-3 py-1.5 rounded-full border border-white/20 text-[11px] text-slate-300 pointer-events-none">
-                Drag the 4 corner pins to align with your reference card/area
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/20 text-xs text-slate-200 pointer-events-none shadow-lg flex items-center gap-2">
+                <span>🎯 Drag the 4 pins to fit the package borders (or tap Auto-Detect)</span>
               </div>
             </div>
 

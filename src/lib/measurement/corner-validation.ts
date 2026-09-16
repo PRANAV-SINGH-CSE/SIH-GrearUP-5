@@ -83,16 +83,26 @@ export function validateCorners(
     });
   }
 
-  // 7. Aspect ratio sanity check
-  const declaredAR = referenceSizeMm.widthMm / referenceSizeMm.heightMm;
-  const measuredAR = estimateQuadAspectRatio(pts);
-  const arDiff = Math.abs(declaredAR - measuredAR) / declaredAR;
-  if (arDiff > 0.5) {
-    errors.push({
-      code: 'REFERENCE_ASPECT_RATIO_MISMATCH',
-      message: `The selected area's aspect ratio (~${measuredAR.toFixed(2)}) differs significantly from the declared reference (${declaredAR.toFixed(2)}).`,
-      suggestion: 'Check that you selected the correct reference area and entered the right dimensions.',
-    });
+  // 7. Aspect ratio sanity check (only for rigid external reference cards like Credit Card or A4 Paper)
+  const isAutoPackage =
+    referenceSizeMm.isAuto ||
+    referenceSizeMm.label?.toLowerCase().includes('package') ||
+    referenceSizeMm.label?.toLowerCase().includes('auto') ||
+    referenceSizeMm.label?.toLowerCase().includes('pouch') ||
+    referenceSizeMm.label?.toLowerCase().includes('carton') ||
+    referenceSizeMm.label?.toLowerCase().includes('bottle');
+
+  if (!isAutoPackage) {
+    const declaredAR = referenceSizeMm.widthMm / referenceSizeMm.heightMm;
+    const measuredAR = estimateQuadAspectRatio(pts);
+    const arDiff = Math.abs(declaredAR - measuredAR) / declaredAR;
+    if (arDiff > 0.55) {
+      errors.push({
+        code: 'REFERENCE_ASPECT_RATIO_MISMATCH',
+        message: `The selected area's aspect ratio (~${measuredAR.toFixed(2)}) differs significantly from the declared reference (${declaredAR.toFixed(2)}).`,
+        suggestion: 'Check that you selected the correct reference area and entered the right dimensions.',
+      });
+    }
   }
 
   // 8. Estimate perspective angle

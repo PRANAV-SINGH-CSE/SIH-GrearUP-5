@@ -42,15 +42,20 @@ export interface ReferenceConfig {
   heightMm: number;
   /** User-supplied label for the reference (e.g. "Package front face") */
   label?: string;
+  /** Whether this is an auto-calibrated package without a rigid reference card */
+  isAuto?: boolean;
 }
 
 /** Common reference presets */
-export const REFERENCE_PRESETS: { label: string; widthMm: number; heightMm: number }[] = [
-  { label: 'Credit Card (ISO 7810)', widthMm: 85.6, heightMm: 53.98 },
-  { label: 'A4 Paper', widthMm: 297, heightMm: 210 },
-  { label: 'A5 Paper', widthMm: 210, heightMm: 148 },
+export const REFERENCE_PRESETS: { label: string; widthMm: number; heightMm: number; isAuto?: boolean }[] = [
+  { label: '⚡ Auto-Detected Package PDP (Standard)', widthMm: 160, heightMm: 240, isAuto: true },
+  { label: 'Standard Snack Pouch / Chips Bag', widthMm: 160, heightMm: 240, isAuto: true },
+  { label: 'FMCG Carton / Box (120 × 180 mm)', widthMm: 120, heightMm: 180, isAuto: true },
+  { label: 'Beverage Can / Bottle (65 × 180 mm)', widthMm: 65, heightMm: 180, isAuto: true },
+  { label: 'Credit Card / ID Card (ISO 7810)', widthMm: 85.6, heightMm: 53.98 },
+  { label: 'A4 Paper (297 × 210 mm)', widthMm: 297, heightMm: 210 },
+  { label: 'A5 Paper (210 × 148 mm)', widthMm: 210, heightMm: 148 },
   { label: '10 cm × 10 cm Square', widthMm: 100, heightMm: 100 },
-  { label: '20 cm × 15 cm Reference', widthMm: 200, heightMm: 150 },
 ];
 
 // ---------------------------------------------------------------------------
