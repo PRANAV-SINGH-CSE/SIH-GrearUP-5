@@ -14,6 +14,7 @@ import {
   TextSizeDeclarationItem,
   getStatutoryMinNumeralHeight,
 } from './text-size.types';
+import { approximatePackageFromQuantity, QuantityApproximation } from './package-approximation';
 import { executeWithGeminiFailover, GEMINI_FLASH_MODELS, GEMINI_API_KEYS } from '../../gemini/gemini-client';
 import { getOpenAIClient, isNovaConfigured, AICREDITS_MODEL } from '../../ai/openai-client';
 
@@ -29,20 +30,37 @@ export interface TextSizeInspectionInput {
 export class AITextSizeInspectionService {
   /**
    * Complete inspection:
-   * 1. Determines PDP area (from calibrated client measurement or package estimation).
+   * 1. Infers package silhouette, dimensions, and PDP area from declared Net Quantity
+   *    (e.g., 52g chips -> 135x195mm pouch ~155 cm² PDP) with a 1-to-10 accuracy score.
    * 2. Calculates statutory minimum numeral height per LMPC Schedule I.
    * 3. Uses AI vision or calibrated geometric analysis to measure printed numeral heights.
    * 4. Evaluates whether each declaration meets or violates the statutory limit.
    */
   async inspectTextSize(input: TextSizeInspectionInput): Promise<TextSizeInspectionResult> {
-    const { imageBuffer, mimeType, ocrResult, product, measurementData } = input;
+    const { imageBuffer, mimeType, ocrResult, product, measurementData, category } = input;
 
-    // Step 1: Calculate PDP Area in cm²
-    let pdpAreaCm2 = 120; // default realistic reference package (120 cm²) if uncalibrated
-    let pdpWidthMm: number | undefined;
-    let pdpHeightMm: number | undefined;
+    // Step 1: AI Package Size & PDP Approximation based on Net Quantity
+    const declaredQtyString =
+      product.netQuantity?.rawText ||
+      (product.netQuantity?.value ? `${product.netQuantity.value.value} ${product.netQuantity.value.unit || ''}`.trim() : null);
 
-    if (measurementData) {
+    const hasPhysicalCalibration = Boolean(
+      measurementData && measurementData.qualityGrade !== 'UNRELIABLE'
+    );
+
+    const approximation: QuantityApproximation = approximatePackageFromQuantity({
+      declaredQuantity: declaredQtyString,
+      productName: product.productName?.value,
+      genericName: product.genericName?.value,
+      category,
+      hasPhysicalCalibration,
+    });
+
+    let pdpAreaCm2 = approximation.estimatedPdpAreaCm2;
+    let pdpWidthMm: number | undefined = approximation.estimatedPdpWidthMm;
+    let pdpHeightMm: number | undefined = approximation.estimatedPdpHeightMm;
+
+    if (hasPhysicalCalibration && measurementData) {
       const wMm = measurementData.pdpContourWidthMm || measurementData.pdpBoundingWidthMm || 100;
       const hMm = measurementData.pdpContourHeightMm || measurementData.pdpBoundingHeightMm || 120;
       pdpWidthMm = wMm;
@@ -70,7 +88,8 @@ export class AITextSizeInspectionService {
             pdpAreaCm2,
             minRequiredHeightMm,
             product,
-            ocrResult
+            ocrResult,
+            approximation
           );
         } catch (err) {
           console.warn('Nova text size inspection failed, falling back:', err);
@@ -85,7 +104,8 @@ export class AITextSizeInspectionService {
             pdpAreaCm2,
             minRequiredHeightMm,
             product,
-            ocrResult
+            ocrResult,
+            approximation
           );
         } catch (err) {
           console.warn('Gemini text size inspection failed, falling back:', err);
@@ -101,7 +121,8 @@ export class AITextSizeInspectionService {
       ocrResult,
       measurementData,
       pdpWidthMm,
-      pdpHeightMm
+      pdpHeightMm,
+      approximation
     );
   }
 
@@ -114,7 +135,8 @@ export class AITextSizeInspectionService {
     pdpAreaCm2: number,
     minRequiredHeightMm: number,
     product: ProductDeclaration,
-    ocrResult?: OCRResult
+    ocrResult?: OCRResult,
+    approximation?: QuantityApproximation
   ): Promise<TextSizeInspectionResult> {
     const netQtyRaw = product.netQuantity?.rawText || (product.netQuantity?.value ? `${product.netQuantity.value.value} ${product.netQuantity.value.unit}` : 'Not detected');
     const mrpRaw = product.mrp?.rawText || (product.mrp?.value?.amount ? `Rs. ${product.mrp.value.amount}` : 'Not detected');
@@ -209,7 +231,7 @@ Return ONLY valid JSON matching this exact structure:
       }
 
       const parsed = JSON.parse(response.text || '{}');
-      return this.normalizeInspectionOutput(parsed, pdpAreaCm2, minRequiredHeightMm, 'ai_multimodal');
+      return this.normalizeInspectionOutput(parsed, pdpAreaCm2, minRequiredHeightMm, 'ai_multimodal', approximation);
     });
   }
 
@@ -222,7 +244,8 @@ Return ONLY valid JSON matching this exact structure:
     pdpAreaCm2: number,
     minRequiredHeightMm: number,
     product: ProductDeclaration,
-    _ocrResult?: OCRResult
+    _ocrResult?: OCRResult,
+    approximation?: QuantityApproximation
   ): Promise<TextSizeInspectionResult> {
     const client = getOpenAIClient();
     if (!client) throw new Error('OpenAI client unavailable');
@@ -275,7 +298,7 @@ Return ONLY valid JSON:
 
     const text = res.choices[0]?.message?.content || '{}';
     const parsed = JSON.parse(text);
-    return this.normalizeInspectionOutput(parsed, pdpAreaCm2, minRequiredHeightMm, 'ai_multimodal');
+    return this.normalizeInspectionOutput(parsed, pdpAreaCm2, minRequiredHeightMm, 'ai_multimodal', approximation);
   }
 
   /**
@@ -288,7 +311,8 @@ Return ONLY valid JSON:
     _ocrResult?: OCRResult,
     measurementData?: MeasurementMetadata,
     pdpWidthMm?: number,
-    pdpHeightMm?: number
+    pdpHeightMm?: number,
+    approximation?: QuantityApproximation
   ): TextSizeInspectionResult {
     const netQtyRaw =
       product.netQuantity?.rawText ||
@@ -379,6 +403,7 @@ Return ONLY valid JSON:
       items,
       method,
       confidence: measurementData ? 0.85 : 0.7,
+      approximation,
       summaryExplanation: hasFailure
         ? `Mandatory declaration numeral height is below the statutory minimum threshold of ${minRequiredHeightMm} mm specified under LMPC 2011 Schedule I.`
         : `All mandatory declaration numeral heights comply with the statutory minimum requirement of ${minRequiredHeightMm} mm for estimated PDP area of ${pdpAreaCm2} cm² under LMPC 2011 Schedule I.`,
@@ -393,7 +418,8 @@ Return ONLY valid JSON:
     parsed: any,
     pdpAreaCm2: number,
     minRequiredHeightMm: number,
-    method: 'ai_multimodal' | 'calibrated_cv'
+    method: 'ai_multimodal' | 'calibrated_cv',
+    approximation?: QuantityApproximation
   ): TextSizeInspectionResult {
     const rawItems = Array.isArray(parsed.items) ? parsed.items : [];
 
@@ -432,6 +458,7 @@ Return ONLY valid JSON:
       items,
       method,
       confidence: Number(parsed.confidence) || 0.9,
+      approximation,
       summaryExplanation:
         parsed.summaryExplanation ||
         (hasFailure

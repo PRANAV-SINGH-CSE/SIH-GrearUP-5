@@ -237,6 +237,10 @@ export class CompliScanPipeline {
         textSizeResult,
       });
 
+      if (textSizeResult?.approximation) {
+        (compliance as any).pdpApproximation = textSizeResult.approximation;
+      }
+
       await this.repository.saveComplianceEvaluation(
         scanId,
         compliance,
@@ -250,6 +254,9 @@ export class CompliScanPipeline {
       }
 
       const report = ReportService.generateReport(updatedScan, locale);
+      if (textSizeResult?.approximation) {
+        report.pdpApproximation = textSizeResult.approximation;
+      }
 
       // Persist dynamic scan record to Firebase Realtime Database
       try {

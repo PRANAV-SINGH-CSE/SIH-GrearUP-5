@@ -15,6 +15,20 @@ export const LocalizedReportExplanationSchema = z.object({
 });
 export type LocalizedReportExplanation = z.infer<typeof LocalizedReportExplanationSchema>;
 
+export const QuantityApproximationSchema = z.object({
+  declaredQuantityRaw: z.string().optional(),
+  parsedQuantityValue: z.number().optional(),
+  parsedQuantityUnit: z.string().optional(),
+  packageArchetype: z.string(),
+  estimatedPdpAreaCm2: z.number(),
+  estimatedPdpWidthMm: z.number(),
+  estimatedPdpHeightMm: z.number(),
+  accuracyScore: z.number(),
+  accuracyGrade: z.enum(['HIGH', 'GOOD', 'MODERATE', 'LOW']),
+  accuracyRationale: z.string(),
+});
+export type QuantityApproximation = z.infer<typeof QuantityApproximationSchema>;
+
 export const ComplianceReportSchema = z.object({
   reportId: z.string(),
   scanId: z.string(),
@@ -46,6 +60,7 @@ export const ComplianceReportSchema = z.object({
     imageQualityWarning: z.string().optional(),
     processingDurationMs: z.number().optional(),
   }),
+  pdpApproximation: QuantityApproximationSchema.optional(),
   legalDisclaimer: z.string(),
 });
 export type ComplianceReport = z.infer<typeof ComplianceReportSchema>;

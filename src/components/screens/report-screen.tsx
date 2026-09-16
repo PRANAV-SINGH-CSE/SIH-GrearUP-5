@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { AppScanItem } from '@/lib/mock-scans';
 import { ProductImageThumbnail, DetectedTextBackOfPackGraphic } from '../ui-assets';
+import { approximatePackageFromQuantity } from '@/lib/compliance/text-size/package-approximation';
 
 export interface ReportScreenProps {
   scan: AppScanItem | null;
@@ -13,6 +14,137 @@ export interface ReportScreenProps {
 }
 
 type ReportTab = 'overview' | 'extracted' | 'rules' | 'evidence';
+
+export function PackageApproximationCard({
+  scan,
+}: {
+  scan: AppScanItem;
+}) {
+  const approx = scan.pdpApproximation || approximatePackageFromQuantity({
+    declaredQuantity: scan.extractedInfo.netQuantity,
+    productName: scan.productName,
+    genericName: scan.productName,
+    category: 'GENERIC_PACKAGED_COMMODITY',
+  });
+
+  const score = approx.accuracyScore;
+  const scorePercent = Math.min(100, Math.max(10, Math.round((score / 10) * 100)));
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-2xs relative overflow-hidden">
+      {/* Subtle top accent bar */}
+      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-teal-500 to-blue-500" />
+
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-base font-bold text-slate-900">
+              AI Package Size & PDP Approximation
+            </span>
+            <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+              Auto-Inferred
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Packaging archetype and Principal Display Panel area derived from declared net quantity
+          </p>
+        </div>
+
+        {/* 1 to 10 Accuracy Gauge Badge */}
+        <div className="flex items-center gap-2.5 bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-1.5 shrink-0 self-start sm:self-auto">
+          <div className="flex flex-col items-end">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              Approximation Accuracy
+            </span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-lg font-black text-emerald-600">
+                {score.toFixed(1)}
+              </span>
+              <span className="text-xs font-bold text-slate-400">/ 10</span>
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-sm ml-1">
+                {approx.accuracyGrade}
+              </span>
+            </div>
+          </div>
+
+          <div className="w-9 h-9 rounded-full relative flex items-center justify-center bg-slate-200">
+            <svg className="w-9 h-9 -rotate-90 transform" viewBox="0 0 36 36">
+              <path
+                className="text-slate-200"
+                strokeWidth="3.5"
+                stroke="currentColor"
+                fill="none"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+              />
+              <path
+                className="text-emerald-500 transition-all duration-500"
+                strokeDasharray={`${scorePercent}, 100`}
+                strokeWidth="3.5"
+                strokeLinecap="round"
+                stroke="currentColor"
+                fill="none"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+              />
+            </svg>
+            <span className="absolute text-[10px] font-black text-slate-700">
+              {Math.round(score)}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Grid of 4 Key Package Metrics */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-3.5">
+        <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide block">
+            Declared Quantity
+          </span>
+          <span className="text-sm font-bold text-slate-900 mt-0.5 block truncate">
+            {scan.extractedInfo.netQuantity || '52 g'}
+          </span>
+        </div>
+
+        <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide block">
+            Package Archetype
+          </span>
+          <span className="text-sm font-bold text-slate-900 mt-0.5 block truncate" title={approx.packageArchetype}>
+            {approx.packageArchetype}
+          </span>
+        </div>
+
+        <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide block">
+            Estimated PDP Area
+          </span>
+          <span className="text-sm font-bold text-slate-900 mt-0.5 block">
+            ~{approx.estimatedPdpAreaCm2} cm²
+          </span>
+        </div>
+
+        <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide block">
+            Canonical Dimensions
+          </span>
+          <span className="text-sm font-bold text-slate-900 mt-0.5 block">
+            {approx.estimatedPdpWidthMm} × {approx.estimatedPdpHeightMm} mm
+          </span>
+        </div>
+      </div>
+
+      {/* Rationale explanation banner */}
+      <div className="rounded-xl bg-emerald-50/70 border border-emerald-200/60 p-3 flex items-start gap-2.5 text-xs text-slate-700">
+        <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 text-xs font-bold mt-0.5">
+          ✓
+        </div>
+        <div className="flex-1 leading-relaxed">
+          <strong className="font-semibold text-emerald-950">Statutory Approximation Basis: </strong>
+          {approx.accuracyRationale}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function ReportScreen({
   scan,
@@ -358,6 +490,9 @@ export function ReportScreen({
             {/* Tab 1: Overview */}
             {activeTab === 'overview' && (
               <div className="flex flex-col gap-5">
+                {/* AI Package Size & PDP Approximation Card */}
+                <PackageApproximationCard scan={scan} />
+
                 {/* Compliance Summary */}
                 <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-2xs">
                   <h3 className="text-sm font-bold text-slate-900 mb-3.5">
@@ -889,6 +1024,9 @@ export function ReportScreen({
       {/* Tab Content 1: Overview */}
       {activeTab === 'overview' && (
         <div className="flex flex-col gap-4">
+          {/* AI Package Size & PDP Approximation Card */}
+          <PackageApproximationCard scan={scan} />
+
           {/* Compliance Summary Section */}
           <div className="rounded-2xl bg-white border border-slate-200/80 p-4 sm:p-5 shadow-2xs">
             <h3 className="text-xs sm:text-sm font-bold text-slate-900 mb-3">

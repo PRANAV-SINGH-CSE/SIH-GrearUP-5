@@ -813,6 +813,10 @@ export class Rule10NumeralHeightInfo implements IComplianceRule {
       const netQtyItem = textSizeResult.items.find((i) => i.field === 'netQuantity');
       const reqHeight = textSizeResult.minRequiredHeightMm;
       const pdpArea = textSizeResult.pdpAreaCm2;
+      const approx = textSizeResult.approximation;
+      const accuracyNote = approx
+        ? ` [AI Package Approximation: ~${pdpArea} cm² PDP, ${approx.accuracyScore}/10 Accuracy (${approx.accuracyGrade})]`
+        : '';
 
       if (netQtyItem) {
         if (netQtyItem.meetsLimit) {
@@ -821,7 +825,7 @@ export class Rule10NumeralHeightInfo implements IComplianceRule {
             name: this.name,
             status: 'PASS',
             severity: 'INFO',
-            message: `Net quantity numeral height is ~${netQtyItem.measuredHeightMm} mm ('${netQtyItem.printedText}'), which COMPLIES with the statutory minimum requirement of ${reqHeight} mm for PDP area of ${pdpArea} cm² under LMPC 2011 Rule 10 & Schedule I.`,
+            message: `Net quantity numeral height is ~${netQtyItem.measuredHeightMm} mm ('${netQtyItem.printedText}'), which COMPLIES with the statutory minimum requirement of ${reqHeight} mm for PDP area of ${pdpArea} cm² under LMPC 2011 Rule 10 & Schedule I.${accuracyNote}`,
             field: 'numeralHeight',
             extractedValue: `${netQtyItem.measuredHeightMm} mm (Min Req: ${reqHeight} mm)`,
             confidence: textSizeResult.confidence,
@@ -836,7 +840,7 @@ export class Rule10NumeralHeightInfo implements IComplianceRule {
             name: this.name,
             status: 'FAIL',
             severity: 'ERROR',
-            message: `NON-COMPLIANCE: Net quantity numeral height is ${netQtyItem.measuredHeightMm} mm ('${netQtyItem.printedText}'), which is DEFICIENT and below the statutory minimum of ${reqHeight} mm required for PDP area of ${pdpArea} cm² under LMPC 2011 Rule 10 & Schedule I.`,
+            message: `NON-COMPLIANCE: Net quantity numeral height is ${netQtyItem.measuredHeightMm} mm ('${netQtyItem.printedText}'), which is DEFICIENT and below the statutory minimum of ${reqHeight} mm required for PDP area of ${pdpArea} cm² under LMPC 2011 Rule 10 & Schedule I.${accuracyNote}`,
             field: 'numeralHeight',
             extractedValue: `${netQtyItem.measuredHeightMm} mm (Min Req: ${reqHeight} mm)`,
             confidence: textSizeResult.confidence,

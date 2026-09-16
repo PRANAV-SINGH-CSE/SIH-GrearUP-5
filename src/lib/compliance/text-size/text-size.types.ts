@@ -18,6 +18,10 @@ export interface TextSizeDeclarationItem {
   remarks: string;
 }
 
+import type { QuantityApproximation } from './package-approximation';
+
+export type { QuantityApproximation };
+
 export interface TextSizeInspectionResult {
   /** Applicable Principal Display Panel area in cm² */
   pdpAreaCm2: number;
@@ -36,6 +40,8 @@ export interface TextSizeInspectionResult {
   method: 'ai_multimodal' | 'calibrated_cv' | 'deterministic_heuristic' | 'mock';
   /** Perception confidence score (0-1) */
   confidence: number;
+  /** AI Quantity-based Package Approximation & 1-to-10 accuracy rating */
+  approximation?: QuantityApproximation;
   /** Plain English explanation with statutory citation */
   summaryExplanation: string;
   /** Legal Reference */

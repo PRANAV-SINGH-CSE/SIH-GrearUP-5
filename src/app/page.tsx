@@ -439,6 +439,7 @@ export default function Home() {
         },
         ruleChecks: ruleChecks,
         imageUrl: URL.createObjectURL(file),
+        pdpApproximation: (apiReport as any).pdpApproximation || (apiScan as any).compliance?.pdpApproximation,
       };
 
       // Persist directly to user-wise Firestore

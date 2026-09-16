@@ -27,6 +27,7 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
   const [distanceProgress, setDistanceProgress] = useState<number>(50);
   const [isFlashing, setIsFlashing] = useState<boolean>(false);
   const smoothedProgressRef = useRef<number>(50);
+  const lastDistanceStatusRef = useRef<DistanceStatus>('searching');
 
   const startCamera = useCallback(async () => {
     try {
@@ -59,7 +60,8 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
     if (isOpen) {
       setCapturedFile(null);
       setCapturedPreviewUrl(null);
-      setDistanceStatus('searching');
+      setDistanceStatus('optimal');
+      lastDistanceStatusRef.current = 'optimal';
       smoothedProgressRef.current = 50;
       setDistanceProgress(50);
       startCamera();
@@ -74,6 +76,7 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
       }
       setCapturedFile(null);
       setDistanceStatus('searching');
+      lastDistanceStatusRef.current = 'searching';
       smoothedProgressRef.current = 50;
     }
     return () => {
@@ -83,7 +86,7 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
     };
   }, [isOpen]);
 
-  // Real-time dynamic distance & sharpness analyzer (runs every 120ms for buttery-smooth responsiveness)
+  // Real-time dynamic distance & sharpness analyzer (runs every 120ms with tolerant AI auto-approximation)
   useEffect(() => {
     if (!isOpen || capturedFile || !hasPermission) return;
 
@@ -120,19 +123,19 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
 
       for (let y = 3; y < 117; y++) {
         const row = y * 160;
-        const isYCenter = y >= 20 && y <= 100;
+        const isYCenter = y >= 15 && y <= 105;
         for (let x = 3; x < 157; x++) {
           const idx = row + x;
           const gx = Math.abs(gray[idx + 1] - gray[idx - 1]);
           const gy = Math.abs(gray[idx + 160] - gray[idx - 160]);
           const mag = gx + gy;
 
-          if (mag > 22) {
+          if (mag > 18) {
             histX[x]++;
             histY[y]++;
             totalEdges++;
 
-            if (isYCenter && x >= 26 && x <= 134) {
+            if (isYCenter && x >= 20 && x <= 140) {
               centerEdges++;
               sumGradCenter += mag;
             }
@@ -140,8 +143,9 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
         }
       }
 
-      // 1. Scene empty or camera pointing away from any object
-      if (totalEdges < 35 || centerEdges < 15) {
+      // 1. Scene completely blank or pointing into void
+      if (totalEdges < 18 || centerEdges < 6) {
+        lastDistanceStatusRef.current = 'searching';
         setDistanceStatus('searching');
         smoothedProgressRef.current = smoothedProgressRef.current * 0.7 + 50 * 0.3;
         setDistanceProgress(Math.round(smoothedProgressRef.current));
@@ -150,8 +154,9 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
 
       const avgCenterSharpness = sumGradCenter / Math.max(1, centerEdges);
 
-      // 2. High spatial frequencies missing (out of focus / motion blur)
-      if (avgCenterSharpness < 6.4) {
+      // 2. Severe blur detection (lenient threshold so standard mobile cameras stay green)
+      if (avgCenterSharpness < 2.4) {
+        lastDistanceStatusRef.current = 'blurry';
         setDistanceStatus('blurry');
         smoothedProgressRef.current = smoothedProgressRef.current * 0.7 + 50 * 0.3;
         setDistanceProgress(Math.round(smoothedProgressRef.current));
@@ -159,7 +164,6 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
       }
 
       // 3. Compute effective horizontal & vertical spatial span using 10th to 90th percentiles
-      // (immune to stray edge noise from bezels/borders)
       let countX = 0;
       let p10X = 3, p90X = 156;
       const target10X = totalEdges * 0.10;
@@ -192,22 +196,38 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
       const spanY = (p90Y - p10Y) / 120;
       const subjectSpan = spanX * 0.55 + spanY * 0.45;
 
-      // Map subjectSpan (typically 0.22 when far to 0.80 when close) into a 0 - 100 distance score
-      const rawProgress = Math.min(95, Math.max(5, ((subjectSpan - 0.22) / 0.58) * 100));
+      // Map subjectSpan into a 0 - 100 distance score
+      const rawProgress = Math.min(95, Math.max(5, ((subjectSpan - 0.18) / 0.62) * 100));
 
       // Responsive Exponential Moving Average smoothing
-      smoothedProgressRef.current = smoothedProgressRef.current * 0.5 + rawProgress * 0.5;
+      smoothedProgressRef.current = smoothedProgressRef.current * 0.4 + rawProgress * 0.6;
       const currentProgress = Math.round(smoothedProgressRef.current);
       setDistanceProgress(currentProgress);
 
-      // Dynamic distance status thresholds
-      if (currentProgress < 35) {
-        setDistanceStatus('too_far');
-      } else if (currentProgress > 72) {
-        setDistanceStatus('too_close');
+      // Lenient Approximation with Hysteresis (once optimal, stays green across normal hand motion)
+      const wasOptimal = lastDistanceStatusRef.current === 'optimal';
+      let nextStatus: DistanceStatus = 'optimal';
+
+      if (wasOptimal) {
+        if (currentProgress < 12) {
+          nextStatus = 'too_far';
+        } else if (currentProgress > 92) {
+          nextStatus = 'too_close';
+        } else {
+          nextStatus = 'optimal';
+        }
       } else {
-        setDistanceStatus('optimal');
+        if (currentProgress < 18) {
+          nextStatus = 'too_far';
+        } else if (currentProgress > 88) {
+          nextStatus = 'too_close';
+        } else {
+          nextStatus = 'optimal';
+        }
       }
+
+      lastDistanceStatusRef.current = nextStatus;
+      setDistanceStatus(nextStatus);
     }, 120);
 
     return () => clearInterval(intervalId);
@@ -424,7 +444,7 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
                   {distanceStatus === 'optimal' ? (
                     <div className="bg-emerald-600/95 text-white px-3.5 py-1 rounded-full text-xs font-bold shadow-lg shadow-emerald-600/40 border border-emerald-300 flex items-center gap-1.5 animate-pulse">
                       <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-                      <span>✓ Ideal Distance — Tap to Scan</span>
+                      <span>✓ Ready to Scan — Distance OK</span>
                     </div>
                   ) : distanceStatus === 'too_far' ? (
                     <div className="bg-amber-600/95 text-white px-3.5 py-1 rounded-full text-xs font-bold shadow-lg shadow-amber-600/40 border border-amber-300 flex items-center gap-1.5">
@@ -432,15 +452,16 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
                     </div>
                   ) : distanceStatus === 'too_close' ? (
                     <div className="bg-amber-600/95 text-white px-3.5 py-1 rounded-full text-xs font-bold shadow-lg shadow-amber-600/40 border border-amber-300 flex items-center gap-1.5">
-                      <span>↔ Too Close — Move Phone Back</span>
+                      <span>↔ Move Phone Back Slightly</span>
                     </div>
                   ) : distanceStatus === 'blurry' ? (
                     <div className="bg-amber-600/95 text-white px-3.5 py-1 rounded-full text-xs font-bold shadow-lg shadow-amber-600/40 border border-amber-300 flex items-center gap-1.5">
-                      <span>📷 Blurry — Hold Steady</span>
+                      <span>📷 Hold Steady</span>
                     </div>
                   ) : (
-                    <div className="bg-black/60 backdrop-blur-xs text-white/90 px-3 py-1 rounded-full text-xs font-medium border border-white/20">
-                      <span>Align Product Label</span>
+                    <div className="bg-emerald-700/80 backdrop-blur-xs text-white px-3 py-1 rounded-full text-xs font-medium border border-emerald-400/30 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      <span>Auto-Approximating Package</span>
                     </div>
                   )}
 
@@ -450,19 +471,19 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
                       <span className={`transition-colors duration-150 ${distanceStatus === 'too_far' ? 'text-amber-300 font-black drop-shadow-[0_0_4px_rgba(251,191,36,0.8)]' : 'text-slate-400'}`}>
                         Far
                       </span>
-                      <span className={`transition-colors duration-150 flex items-center gap-1 ${distanceStatus === 'optimal' ? 'text-emerald-300 font-black drop-shadow-[0_0_4px_rgba(52,211,153,0.8)]' : 'text-slate-400'}`}>
+                      <span className={`transition-colors duration-150 flex items-center gap-1 ${distanceStatus === 'optimal' ? 'text-emerald-300 font-black drop-shadow-[0_0_4px_rgba(52,211,153,0.8)]' : 'text-emerald-400/80 font-bold'}`}>
                         {distanceStatus === 'optimal' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-ping" />}
-                        ● Ideal
+                        ● Ready
                       </span>
                       <span className={`transition-colors duration-150 ${distanceStatus === 'too_close' ? 'text-amber-300 font-black drop-shadow-[0_0_4px_rgba(251,191,36,0.8)]' : 'text-slate-400'}`}>
                         Close
                       </span>
                     </div>
 
-                    {/* Smooth Continuous Track with Target Zone */}
+                    {/* Smooth Continuous Track with Tolerant Target Zone */}
                     <div className="relative w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
-                      {/* Ideal Zone in middle (35% to 72%) */}
-                      <div className="absolute left-[35%] right-[28%] inset-y-0 bg-emerald-500/40 rounded-full" />
+                      {/* Generous Ready Zone (18% to 88%) */}
+                      <div className="absolute left-[18%] right-[12%] inset-y-0 bg-emerald-500/40 rounded-full" />
                       {/* Live Sliding Indicator Dot */}
                       <div
                         className={`absolute top-0 bottom-0 w-3 -ml-1.5 rounded-full transition-all duration-100 shadow-sm ${

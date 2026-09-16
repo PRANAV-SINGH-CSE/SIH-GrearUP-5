@@ -58,6 +58,7 @@ export class ReportService {
         imageQualityWarning: scan.asset?.qualityWarning,
         processingDurationMs: scan.ocrResult?.durationMs,
       },
+      pdpApproximation: (compliance as any)?.pdpApproximation || (scan as any)?.pdpApproximation,
       legalDisclaimer: STATUTORY_LEGAL_DISCLAIMER[locale],
     };
   }

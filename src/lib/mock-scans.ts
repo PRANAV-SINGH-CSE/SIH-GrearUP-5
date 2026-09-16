@@ -44,6 +44,18 @@ export interface AppScanItem {
   };
   ruleChecks: RuleCheckItem[];
   imageUrl?: string;
+  pdpApproximation?: {
+    declaredQuantityRaw?: string;
+    parsedQuantityValue?: number;
+    parsedQuantityUnit?: string;
+    packageArchetype: string;
+    estimatedPdpAreaCm2: number;
+    estimatedPdpWidthMm: number;
+    estimatedPdpHeightMm: number;
+    accuracyScore: number;
+    accuracyGrade: 'HIGH' | 'GOOD' | 'MODERATE' | 'LOW';
+    accuracyRationale: string;
+  };
 }
 
 // Fallback dummy structure if a component needs a non-null object for preview
