@@ -11,6 +11,74 @@ export interface CameraModalProps {
 
 export type DistanceStatus = 'too_far' | 'too_close' | 'optimal' | 'blurry' | 'searching';
 
+/**
+ * Detects and selects the device ID of the phone's primary 1x main camera,
+ * strictly avoiding ultra-wide (0.5x), macro, depth, and telephoto sensors.
+ */
+async function selectMainWideCameraDeviceId(): Promise<string | null> {
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) {
+    return null;
+  }
+
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videoDevices = devices.filter((d) => d.kind === 'videoinput');
+    if (videoDevices.length <= 1) return videoDevices[0]?.deviceId || null;
+
+    // Filter out front/user/selfie cameras
+    const backCameras = videoDevices.filter((d) => {
+      const label = (d.label || '').toLowerCase();
+      return !label.includes('front') && !label.includes('user') && !label.includes('selfie');
+    });
+
+    if (backCameras.length === 0) return null;
+
+    // Score devices to identify the primary 1x main camera
+    const scored = backCameras.map((device) => {
+      const label = (device.label || '').toLowerCase();
+      let score = 0;
+
+      // DISQUALIFY ultra-wide, 0.5x, macro, depth sensors
+      if (label.includes('ultra') || label.includes('0.5') || label.includes('0.6')) {
+        score -= 200;
+      }
+      if (label.includes('macro') || label.includes('depth') || label.includes('tof')) {
+        score -= 200;
+      }
+      if (label.includes('tele') || label.includes('zoom') || label.includes('3x') || label.includes('5x')) {
+        score -= 50;
+      }
+
+      // Heavily prioritize main, primary, standard, camera2 0, or back 0
+      if (label.includes('main') || label.includes('primary') || label.includes('standard')) {
+        score += 80;
+      }
+      if (label.includes('camera2 0') || label.includes('camera 0') || label.includes('back 0') || label.includes('rear 0')) {
+        score += 70;
+      }
+      // "Wide Angle Camera" without "Ultra" is iOS/Android standard 1x camera
+      if (label.includes('wide') && !label.includes('ultra')) {
+        score += 40;
+      }
+      if (label.includes('back') || label.includes('rear') || label.includes('environment')) {
+        score += 20;
+      }
+
+      return { device, score };
+    });
+
+    scored.sort((a, b) => b.score - a.score);
+
+    if (scored[0] && scored[0].score > -100) {
+      return scored[0].device.deviceId;
+    }
+    return backCameras[0].deviceId;
+  } catch (err) {
+    console.warn('Could not enumerate camera devices:', err);
+    return null;
+  }
+}
+
 export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraModalProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -21,6 +89,9 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [capturedFile, setCapturedFile] = useState<File | null>(null);
   const [capturedPreviewUrl, setCapturedPreviewUrl] = useState<string | null>(null);
+  const [activeCameraLabel, setActiveCameraLabel] = useState<string>('1x Main Lens');
+  const [currentZoom, setCurrentZoom] = useState<number>(1.0);
+  const [supportedZoom, setSupportedZoom] = useState<{ min: number; max: number } | null>(null);
 
   // Real-time distance and sharpness assistance
   const [distanceStatus, setDistanceStatus] = useState<DistanceStatus>('searching');
@@ -29,6 +100,21 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
   const smoothedProgressRef = useRef<number>(50);
   const lastDistanceStatusRef = useRef<DistanceStatus>('searching');
 
+  const applyZoom = useCallback(async (targetZoom: number) => {
+    if (!stream) return;
+    const track = stream.getVideoTracks()[0];
+    if (!track || !track.applyConstraints) return;
+
+    try {
+      await track.applyConstraints({
+        advanced: [{ zoom: targetZoom } as any],
+      });
+      setCurrentZoom(targetZoom);
+    } catch (e) {
+      console.warn('Could not apply zoom:', e);
+    }
+  }, [stream]);
+
   const startCamera = useCallback(async () => {
     try {
       if (stream) {
@@ -36,13 +122,90 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
       }
       setErrorMessage(null);
 
-      const newStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode,
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-        },
-      });
+      let newStream: MediaStream;
+
+      if (facingMode === 'environment') {
+        const preferredDeviceId = await selectMainWideCameraDeviceId();
+        if (preferredDeviceId) {
+          try {
+            newStream = await navigator.mediaDevices.getUserMedia({
+              video: {
+                deviceId: { exact: preferredDeviceId },
+                width: { ideal: 1920 },
+                height: { ideal: 1080 },
+              },
+            });
+          } catch (deviceErr) {
+            console.warn('Direct deviceId access failed, falling back to facingMode:', deviceErr);
+            newStream = await navigator.mediaDevices.getUserMedia({
+              video: {
+                facingMode: { ideal: 'environment' },
+                width: { ideal: 1920 },
+                height: { ideal: 1080 },
+              },
+            });
+          }
+        } else {
+          newStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: { ideal: 'environment' },
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+            },
+          });
+        }
+      } else {
+        newStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'user',
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          },
+        });
+      }
+
+      // Inspect track capabilities: Force zoom to 1.0x (main camera) and enable continuous autofocus
+      const track = newStream.getVideoTracks()[0];
+      if (track) {
+        const label = track.label || '';
+        if (facingMode === 'environment') {
+          setActiveCameraLabel('1x Main Lens');
+        } else {
+          setActiveCameraLabel('Front Camera');
+        }
+
+        if (track.getCapabilities) {
+          const capabilities = track.getCapabilities() as any;
+          const advancedConstraints: any = {};
+
+          // If device has multi-camera zoom (e.g. 0.5x ultra-wide to 10x):
+          // FORCE zoom to 1.0x so it never defaults to 0.5x ultra-wide!
+          if (capabilities.zoom) {
+            const minZ = capabilities.zoom.min || 1.0;
+            const maxZ = capabilities.zoom.max || 1.0;
+            setSupportedZoom({ min: minZ, max: maxZ });
+            const mainZoom = Math.min(maxZ, Math.max(1.0, minZ));
+            advancedConstraints.zoom = mainZoom;
+            setCurrentZoom(mainZoom);
+          }
+
+          if (
+            capabilities.focusMode &&
+            Array.isArray(capabilities.focusMode) &&
+            capabilities.focusMode.includes('continuous')
+          ) {
+            advancedConstraints.focusMode = 'continuous';
+          }
+
+          if (Object.keys(advancedConstraints).length > 0 && track.applyConstraints) {
+            try {
+              await track.applyConstraints({ advanced: [advancedConstraints] });
+            } catch (zoomErr) {
+              console.warn('Could not apply advanced lens constraints:', zoomErr);
+            }
+          }
+        }
+      }
 
       setStream(newStream);
       setHasPermission(true);
@@ -522,8 +685,11 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
                   }`}
                 />
 
-                <p className="text-center text-[11px] text-white/80 bg-black/50 backdrop-blur-xs py-0.5 px-3 rounded-full mx-auto self-center">
-                  Keep MRP, Net Qty & Dates inside frame
+                <p className="text-center text-[11px] text-white/90 bg-black/60 backdrop-blur-xs py-0.5 px-3 rounded-full mx-auto self-center flex items-center gap-1.5 border border-white/10 shadow-sm">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="font-semibold">{activeCameraLabel}</span>
+                  <span className="text-white/40">•</span>
+                  <span>Keep MRP & Qty in frame</span>
                 </p>
 
                 <span
@@ -585,7 +751,44 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
           </button>
 
           {/* Big Circular Capture Shutter Button with distance-reactive styling */}
-          <div className="flex flex-col items-center gap-1.5">
+          <div className="flex flex-col items-center gap-1.5 relative">
+            {/* Quick 1x Main / 2x Zoom Selector */}
+            {facingMode === 'environment' && supportedZoom && supportedZoom.max > 1.2 && (
+              <div className="absolute -top-9 flex items-center gap-1 bg-black/80 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/20 shadow-md z-20">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    applyZoom(1.0);
+                  }}
+                  className={`px-2 py-0.5 text-[10px] rounded-full transition-all cursor-pointer font-black ${
+                    currentZoom <= 1.2
+                      ? 'bg-emerald-400 text-black shadow-xs'
+                      : 'text-white/70 hover:text-white'
+                  }`}
+                  title="Force 1x Main Camera"
+                >
+                  1x Main
+                </button>
+                {supportedZoom.max >= 2.0 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      applyZoom(2.0);
+                    }}
+                    className={`px-2 py-0.5 text-[10px] rounded-full transition-all cursor-pointer font-bold ${
+                      currentZoom >= 1.8
+                        ? 'bg-emerald-400 text-black shadow-xs'
+                        : 'text-white/70 hover:text-white'
+                    }`}
+                    title="2x Zoom"
+                  >
+                    2x
+                  </button>
+                )}
+              </div>
+            )}
             <button
               type="button"
               onClick={handleCapture}
