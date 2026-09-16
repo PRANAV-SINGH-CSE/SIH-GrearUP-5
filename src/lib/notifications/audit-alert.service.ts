@@ -19,7 +19,7 @@ export class AuditAlertService {
     window.localStorage.setItem(this.STORAGE_KEY, String(enabled));
   }
 
-  static async requestPermission(): Promise<'granted' | 'denied' | 'unsupported'> {
+  static async requestPermission(): Promise<NotificationPermission | 'unsupported'> {
     if (typeof window === 'undefined' || !('Notification' in window)) {
       return 'unsupported';
     }
@@ -36,14 +36,16 @@ export class AuditAlertService {
 
   static triggerAlert(item: {
     productName: string;
-    overallStatus: string;
+    status?: string;
+    overallStatus?: string;
     violationsCount?: number;
     explanation?: string;
   }): void {
     if (!this.isEnabled()) return;
 
-    const isNonCompliant = item.overallStatus === 'NON_COMPLIANT';
-    const isNeedsReview = item.overallStatus === 'NEEDS_REVIEW';
+    const effStatus = item.status || item.overallStatus || '';
+    const isNonCompliant = effStatus === 'NON_COMPLIANT';
+    const isNeedsReview = effStatus === 'NEEDS_REVIEW';
 
     // Only alert on statutory violations or items requiring urgent officer review
     if (!isNonCompliant && !isNeedsReview) return;
