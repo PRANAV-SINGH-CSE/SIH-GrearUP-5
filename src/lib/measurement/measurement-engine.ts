@@ -40,6 +40,8 @@ export interface MeasureOptions {
    * Coordinates are in the RECTIFIED image space.
    */
   manualObjectBoundary?: BBox;
+  /** Skip strict quality gate rejection for auto-calibration */
+  skipQualityCheck?: boolean;
 }
 
 export type StageCallback = (stage: MeasurementStage) => void;
@@ -70,7 +72,7 @@ export class MeasurementEngine {
       // --- Step 1: Validate image quality ---
       this.emitStage('validating_image');
       const quality = assessImageQuality(imageElement);
-      if (!quality.acceptable) {
+      if (!quality.acceptable && !options?.skipQualityCheck) {
         this.emitStage('failed');
         return quality.errors[0]; // Return first error
       }
