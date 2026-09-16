@@ -64,12 +64,19 @@ body {
   background-color: #111827 !important;
 }
 
-[data-theme="dark"] [class*="bg-"][class*="-50"] {
+[data-theme="dark"] [class*="bg-"][class*="-50"]:not([class*="-500"]):not([class*="-50/"]):not([class*="camera"]) {
   background-color: #172033 !important;
 }
 
-[data-theme="dark"] [class*="bg-"][class*="-100"] {
+[data-theme="dark"] [class*="bg-"][class*="-100"]:not([class*="camera"]) {
   background-color: #1e293b !important;
+}
+
+/* Camera modal, video feeds, and scanner viewfinder overlays must NEVER be obscured by dark mode backgrounds */
+[data-theme="dark"] [data-camera-viewfinder],
+[data-theme="dark"] [data-camera-modal] [data-camera-viewfinder],
+[data-camera-viewfinder] {
+  background-color: transparent !important;
 }
 
 [data-theme="dark"] [class*="bg-slate-50"] {

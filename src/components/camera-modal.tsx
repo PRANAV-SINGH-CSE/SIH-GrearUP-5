@@ -549,7 +549,10 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-between pt-[max(3rem,env(safe-area-inset-top,0px))] pb-[max(2.25rem,env(safe-area-inset-bottom,0px))] px-4 animate-in fade-in duration-200">
+    <div
+      data-camera-modal
+      className="camera-modal fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-between pt-[max(3rem,env(safe-area-inset-top,0px))] pb-[max(2.25rem,env(safe-area-inset-bottom,0px))] px-4 animate-in fade-in duration-200"
+    >
       {/* Top Controls Bar */}
       <div className="w-full max-w-md flex items-center justify-between text-white z-10 pt-1 pb-1">
         <span className="text-sm font-semibold tracking-wide flex items-center gap-2">
@@ -695,11 +698,13 @@ export function CameraModal({ isOpen, onClose, onCapture, onMeasure }: CameraMod
             />
             {/* Real-time Distance & Proximity Framing Overlay */}
             <div
-              className={`absolute inset-6 sm:inset-8 border-2 border-dashed rounded-2xl pointer-events-none flex flex-col justify-between p-3 transition-colors duration-200 ${
+              data-camera-viewfinder
+              style={{ backgroundColor: 'transparent' }}
+              className={`camera-viewfinder-overlay absolute inset-6 sm:inset-8 border-2 border-dashed rounded-2xl pointer-events-none flex flex-col justify-between p-3 transition-colors duration-200 bg-transparent ${
                 distanceStatus === 'optimal'
-                  ? 'border-emerald-400/80 bg-emerald-500/5'
+                  ? 'border-emerald-400/80'
                   : distanceStatus === 'too_far' || distanceStatus === 'too_close'
-                  ? 'border-amber-400/80 bg-amber-500/5'
+                  ? 'border-amber-400/80'
                   : distanceStatus === 'blurry'
                   ? 'border-amber-400/60'
                   : 'border-white/50'
