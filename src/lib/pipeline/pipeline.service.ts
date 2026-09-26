@@ -253,7 +253,8 @@ export class CompliScanPipeline {
       }
 
       // If additional packaging images are present, run OCR perception on them and merge transcripts
-      if (options.additionalImages && options.additionalImages.length > 0) {
+      // (For Gemini, avoid repeated API calls to maintain 1 request per scan)
+      if (options.additionalImages && options.additionalImages.length > 0 && this.ocr.name !== 'gemini') {
         for (let i = 0; i < Math.min(2, options.additionalImages.length); i++) {
           const extra = options.additionalImages[i];
           try {

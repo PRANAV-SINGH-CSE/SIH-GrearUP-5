@@ -16,7 +16,7 @@ import {
 } from './text-size.types';
 import { approximatePackageFromQuantity, QuantityApproximation } from './package-approximation';
 import { executeGeminiGenerateContent, GEMINI_API_KEYS } from '../../gemini/gemini-client';
-// import { getOpenAIClient, isNovaConfigured, AICREDITS_MODEL } from '../../ai/openai-client';
+import { getOpenAIClient, isNovaConfigured, AICREDITS_MODEL } from '../../ai/openai-client';
 
 export interface TextSizeInspectionInput {
   imageBuffer?: Buffer;
@@ -100,6 +100,9 @@ export class AITextSizeInspectionService {
       }
       */
 
+      // Redundant 3rd Gemini call disabled to prevent concurrent duplicate API requests.
+      // Calibrated geometric inspection below handles Schedule I requirements deterministically in 0ms.
+      /*
       if (GEMINI_API_KEYS.length > 0 || process.env.GEMINI_API_KEY) {
         try {
           return await this.inspectWithGemini(
@@ -115,6 +118,7 @@ export class AITextSizeInspectionService {
           console.warn('Gemini text size inspection failed, falling back:', err);
         }
       }
+      */
     }
 
     // Step 4: Calibrated Geometric / Deterministic Inspection Fallback

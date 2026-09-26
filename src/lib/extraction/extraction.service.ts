@@ -55,6 +55,12 @@ export class ExtractionService {
     }
 
     if (this.aiProvider.name === 'gemini') {
+      // If OCR perception was already performed by Gemini, avoid making a redundant 2nd Gemini API call.
+      // High-precision Gemini OCR text is deterministically parsed into statutory declarations in 0ms.
+      if (ocrResult.provider && (ocrResult.provider.includes('gemini') || ocrResult.provider === 'gemini')) {
+        return DeterministicExtractor.extract(ocrResult);
+      }
+
       try {
         return await this.aiProvider.extractDeclarations(ocrResult, categoryHint, imageBuffer, mimeType, additionalImages);
       } catch (err) {
