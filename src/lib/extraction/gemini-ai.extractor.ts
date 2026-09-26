@@ -2,7 +2,7 @@ import { IAIExtractionProvider, MultiImageItem } from './extraction.interface';
 import { ProductDeclaration, ProductDeclarationSchema } from '../types/extraction';
 import { OCRResult } from '../types/ocr';
 import { DeterministicExtractor } from './deterministic.extractor';
-import { executeWithGeminiFailover, GEMINI_FLASH_MODELS } from '../gemini/gemini-client';
+import { executeGeminiGenerateContent } from '../gemini/gemini-client';
 
 export class GeminiAIExtractionProvider implements IAIExtractionProvider {
   readonly name = 'gemini';
@@ -81,79 +81,61 @@ Return ONLY valid JSON with this exact schema:
 }`;
 
     try {
-      return await executeWithGeminiFailover(async (ai) => {
-        const parts: any[] = [];
+      const parts: any[] = [];
 
-        // Attach primary image (Panel 1: Front PDP)
-        if (imageBuffer && imageBuffer.length > 0) {
-          parts.push({ text: 'Packaging Image 1 (Front Principal Display Panel):' });
-          parts.push({
-            inlineData: {
-              data: imageBuffer.toString('base64'),
-              mimeType: mimeType || 'image/jpeg',
-            },
-          });
-        }
-
-        // Attach additional images (up to 2 more, e.g. Back Panel, Side/MRP Panel)
-        if (additionalImages && additionalImages.length > 0) {
-          additionalImages.slice(0, 2).forEach((img, idx) => {
-            if (img.buffer && img.buffer.length > 0) {
-              const label = img.label || (idx === 0 ? 'Back / Information Panel' : 'Side / MRP & Dates Panel');
-              parts.push({ text: `Packaging Image ${idx + 2} (${label}):` });
-              parts.push({
-                inlineData: {
-                  data: img.buffer.toString('base64'),
-                  mimeType: img.mimeType || 'image/jpeg',
-                },
-              });
-            }
-          });
-        }
-
+      // Attach primary image (Panel 1: Front PDP)
+      if (imageBuffer && imageBuffer.length > 0) {
+        parts.push({ text: 'Packaging Image 1 (Front Principal Display Panel):' });
         parts.push({
-          text: `${systemInstructions}\n\nHere is the initial OCR transcript from the package image(s):\n---\n${ocrResult.fullText || '(No OCR text found)'}\n---\nPlease cross-examine the image(s) across all visible panels, verify OCR against the physical labels, correct any discrepancies, and extract the full statutory declarations in valid JSON.`,
+          inlineData: {
+            data: imageBuffer.toString('base64'),
+            mimeType: mimeType || 'image/jpeg',
+          },
         });
+      }
 
-        let response;
-        const candidateModels = GEMINI_FLASH_MODELS;
-
-        for (const candidateModel of candidateModels) {
-          try {
-            response = await ai.models.generateContent({
-              model: candidateModel,
-              contents: [{ role: 'user', parts }],
-              config: {
-                responseMimeType: 'application/json',
+      // Attach additional images (up to 2 more, e.g. Back Panel, Side/MRP Panel)
+      if (additionalImages && additionalImages.length > 0) {
+        additionalImages.slice(0, 2).forEach((img, idx) => {
+          if (img.buffer && img.buffer.length > 0) {
+            const label = img.label || (idx === 0 ? 'Back / Information Panel' : 'Side / MRP & Dates Panel');
+            parts.push({ text: `Packaging Image ${idx + 2} (${label}):` });
+            parts.push({
+              inlineData: {
+                data: img.buffer.toString('base64'),
+                mimeType: img.mimeType || 'image/jpeg',
               },
             });
-            if (response && response.text) break;
-          } catch (modelErr) {
-            console.warn(`Model ${candidateModel} call failed, trying next fallback:`, modelErr);
           }
-        }
-
-        if (!response) {
-          throw new Error('Failed to generate extraction content across candidate models');
-        }
-
-        const jsonStr = response.text || '{}';
-        const parsed = JSON.parse(jsonStr);
-
-        const validated = ProductDeclarationSchema.safeParse({
-          ...parsed,
-          extractionMethod: imageBuffer ? 'hybrid' : 'ai',
         });
+      }
 
-        if (validated.success) {
-          return validated.data;
-        } else {
-          console.warn('AI Extraction schema mismatch:', validated.error);
-          return DeterministicExtractor.extract(ocrResult);
-        }
+      parts.push({
+        text: `${systemInstructions}\n\nHere is the initial OCR transcript from the package image(s):\n---\n${ocrResult.fullText || '(No OCR text found)'}\n---\nPlease cross-examine the image(s) across all visible panels, verify OCR against the physical labels, correct any discrepancies, and extract the full statutory declarations in valid JSON.`,
       });
+
+      const { text: jsonStr } = await executeGeminiGenerateContent({
+        contents: [{ role: 'user', parts }],
+        config: {
+          responseMimeType: 'application/json',
+        },
+      });
+
+      const parsed = JSON.parse(jsonStr || '{}');
+
+      const validated = ProductDeclarationSchema.safeParse({
+        ...parsed,
+        extractionMethod: imageBuffer ? 'hybrid' : 'ai',
+      });
+
+      if (validated.success) {
+        return validated.data;
+      } else {
+        console.warn('AI Extraction schema mismatch:', validated.error);
+        return DeterministicExtractor.extract(ocrResult);
+      }
     } catch (err) {
-      console.warn('Gemini extraction failover exhausted, falling back to deterministic extraction:', err);
+      console.warn('Gemini extraction failed or exhausted, falling back to deterministic extraction:', err);
       return DeterministicExtractor.extract(ocrResult);
     }
   }

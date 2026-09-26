@@ -17,11 +17,12 @@ export class ExtractionService {
     } else {
       const isTest = process.env.NODE_ENV === 'test';
 
-      // Nova (AICredits) takes priority when its API key is configured,
-      // regardless of AI_PROVIDER env var
+      // Nova (AICredits) commented out per user request - using Google AI Studio (Gemini) SDK
+      /*
       if (!isTest && isNovaConfigured()) {
         this.aiProvider = new NovaAIExtractionProvider();
-      } else if (
+      } else
+      */ if (
         !isTest &&
         (GEMINI_API_KEYS.length > 0 || process.env.GEMINI_API_KEY)
       ) {

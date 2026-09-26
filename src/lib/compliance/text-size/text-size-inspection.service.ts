@@ -15,8 +15,8 @@ import {
   getStatutoryMinNumeralHeight,
 } from './text-size.types';
 import { approximatePackageFromQuantity, QuantityApproximation } from './package-approximation';
-import { executeWithGeminiFailover, GEMINI_FLASH_MODELS, GEMINI_API_KEYS } from '../../gemini/gemini-client';
-import { getOpenAIClient, isNovaConfigured, AICREDITS_MODEL } from '../../ai/openai-client';
+import { executeGeminiGenerateContent, GEMINI_API_KEYS } from '../../gemini/gemini-client';
+// import { getOpenAIClient, isNovaConfigured, AICREDITS_MODEL } from '../../ai/openai-client';
 
 export interface TextSizeInspectionInput {
   imageBuffer?: Buffer;
@@ -81,6 +81,8 @@ export class AITextSizeInspectionService {
 
     // Step 3: Try AI Vision Multimodal Inspection if image buffer is available
     if (!isTest && imageBuffer && imageBuffer.length > 0) {
+      // AI Credits (Nova) SDK commented out - using Google AI Studio (Gemini) SDK
+      /*
       if (isNovaConfigured()) {
         try {
           return await this.inspectWithNova(
@@ -96,6 +98,7 @@ export class AITextSizeInspectionService {
           console.warn('Nova text size inspection failed, falling back:', err);
         }
       }
+      */
 
       if (GEMINI_API_KEYS.length > 0 || process.env.GEMINI_API_KEY) {
         try {
@@ -197,43 +200,28 @@ Return ONLY valid JSON matching this exact structure:
   ]
 }`;
 
-    return executeWithGeminiFailover(async (ai) => {
-      let response;
-      for (const model of GEMINI_FLASH_MODELS) {
-        try {
-          response = await ai.models.generateContent({
-            model,
-            contents: [
-              {
-                role: 'user',
-                parts: [
-                  {
-                    inlineData: {
-                      data: imageBuffer.toString('base64'),
-                      mimeType: mimeType || 'image/jpeg',
-                    },
-                  },
-                  { text: prompt },
-                ],
+    const { text: responseText } = await executeGeminiGenerateContent({
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            {
+              inlineData: {
+                data: imageBuffer.toString('base64'),
+                mimeType: mimeType || 'image/jpeg',
               },
-            ],
-            config: {
-              responseMimeType: 'application/json',
             },
-          });
-          if (response && response.text) break;
-        } catch (err) {
-          console.warn(`Gemini text size model ${model} failed, trying next:`, err);
-        }
-      }
-
-      if (!response) {
-        throw new Error('Gemini failed to inspect text size');
-      }
-
-      const parsed = JSON.parse(response.text || '{}');
-      return this.normalizeInspectionOutput(parsed, pdpAreaCm2, minRequiredHeightMm, 'ai_multimodal', approximation);
+            { text: prompt },
+          ],
+        },
+      ],
+      config: {
+        responseMimeType: 'application/json',
+      },
     });
+
+    const parsed = JSON.parse(responseText || '{}');
+    return this.normalizeInspectionOutput(parsed, pdpAreaCm2, minRequiredHeightMm, 'ai_multimodal', approximation);
   }
 
   /**
