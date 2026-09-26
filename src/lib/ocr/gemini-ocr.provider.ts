@@ -1,3 +1,4 @@
+import sharp from 'sharp';
 import { IOCRProvider, OCROptions } from './ocr.interface';
 import { OCRResult, OCRBlock } from '../types/ocr';
 import { executeGeminiGenerateContent } from '../gemini/gemini-client';
@@ -11,6 +12,22 @@ export class GeminiOCRProvider implements IOCRProvider {
     _options?: OCROptions
   ): Promise<OCRResult> {
     const startTime = Date.now();
+
+    // Fast payload compression: convert large images (>250KB) to 1200px JPEG to reduce base64 upload payload from 10MB to ~150KB
+    let payloadBuffer = imageBuffer;
+    let payloadMime = mimeType || 'image/jpeg';
+
+    if (imageBuffer.length > 250_000) {
+      try {
+        payloadBuffer = await sharp(imageBuffer)
+          .resize({ width: 1200, height: 1200, fit: 'inside', withoutEnlargement: true })
+          .jpeg({ quality: 85 })
+          .toBuffer();
+        payloadMime = 'image/jpeg';
+      } catch {
+        payloadBuffer = imageBuffer;
+      }
+    }
 
     const prompt = `You are a high-precision OCR perception engine for Indian packaged commodity labels.
 Inspect this image and extract ALL text exactly as printed.
@@ -35,8 +52,8 @@ Do NOT summarize, do NOT correct typos, do NOT invent text. Transcribe verbatim.
           parts: [
             {
               inlineData: {
-                data: imageBuffer.toString('base64'),
-                mimeType: mimeType || 'image/jpeg',
+                data: payloadBuffer.toString('base64'),
+                mimeType: payloadMime,
               },
             },
             { text: prompt },
